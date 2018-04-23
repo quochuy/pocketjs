@@ -1,0 +1,38 @@
+{
+  "name": "pocketjs",
+  "version": "0.0.1",
+  "description": "Javascript POCKET confirmer",
+  "author": "Quoc Huy Nguyen Dinh <quochuy@gmail.com>",
+  "homepage": "http://github.com/quochuy",
+  "keywords": [
+    "pocket",
+    "steem",
+    "bot",
+    "steemit",
+    "blockchain",
+    "subchain"
+  ],
+  "directories": {
+    "utils": "./utils"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "command-line-args": "^5.0.2",
+    "dsteem": "^0.8.7",
+    "fs": "0.0.1-security",
+    "lodash": "^4.17.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/quochuy/pocketjs.git"
+  },
+  "engines": {
+    "node": ">= 4.0.0"
+  },
+  "devDependencies": {
+    "mocha": "^5.1.1"
+  },
+  "scripts": {
+    "test": "mocha"
+  }
+}
