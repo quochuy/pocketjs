@@ -1,0 +1,19 @@
+{
+  "steem": {
+    "rpcNodes": [
+      "https://rpc.buildteam.io",
+      "https://gtg.steem.house:8090",
+      "https://steemd.privex.io/",
+      "http://steemd.pevo.science/",
+      "http://steemd.minnowsupportproject.org/"
+    ],
+    "username": "",
+    "postingKey": ""
+  },
+
+  "pocket": {
+    "confirmMessage": "Thanks for using POCKET! I am running [this confirmer code.](https://github.com/quochuy/pocketks)",
+    "confirmationEnabled": false,
+    "voteOnValidConfirmation": false
+  }
+}
