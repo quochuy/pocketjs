@@ -9,9 +9,6 @@ var app = {
   run: function() {
     app.db.init();
 
-    console.log(app.db.get_top_accounts(5));
-    console.log('------------');
-    console.log(app.db.get_bottom_accounts(5));
   }
 };
 
