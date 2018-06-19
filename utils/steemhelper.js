@@ -1,49 +1,167 @@
 const dsteem = require('dsteem');
-const logger = require('logger');
+const logger = require('./logger');
+const database = require('./db');
 const client = new dsteem.Client('https://api.steemit.com');
 
 const steemhelper = {
-  config: require('../configs/teamvn.json'),
-
+  config: require('../config.json'),
+  progress: {},
   formatter: {
-    // https://github.com/steemit/steem-js/blob/master/src/formatter.js
-    reputation: function(reputation) {
-      if (reputation == null) return reputation;
-      reputation = parseInt(reputation);
-      let rep = String(reputation);
-      const neg = rep.charAt(0) === "-";
-      rep = neg ? rep.substring(1) : rep;
-      const str = rep;
-      const leadingDigits = parseInt(str.substring(0, 4));
-      const log = Math.log(leadingDigits) / Math.log(10);
-      const n = str.length - 1;
-      let out = n + (log - parseInt(log));
-      if (isNaN(out)) out = 0;
-      out = Math.max(out - 9, 0);
-      out = (neg ? -1 : 1) * out;
-      out = out * 9 + 25;
-      out = parseInt(out);
-      return out;
-    },
-
-    commentPermlink: function(parentAuthor, parentPermlink) {
+    /**
+     * Generate a new permlink for a comment based on the parent post
+     *
+     * @param parentAuthor
+     * @param parentPermlink
+     * @returns {string}
+     */
+    commentPermlink: function (parentAuthor, parentPermlink) {
       const timeStr = new Date()
         .toISOString()
         .replace(/[^a-zA-Z0-9]+/g, "")
         .toLowerCase();
       parentPermlink = parentPermlink.replace(/(-\d{8}t\d{9}z)/g, "");
-      return "re-" + parentAuthor.replace(/[^a-zA-Z0-9]+/g, "") + "-" + parentPermlink + "-" + timeStr;
+      return "re-" + parentAuthor + "-" + parentPermlink + "-" + timeStr;
     }
   },
 
-  upvote: async function(author, permlink, weight) {
-    return new Promise(async function(resolve, reject) {
-      if (typeof weight === 'undefined') {
-        weight = 10000;
+  /**
+   * @param block_number      Start at this block number or start at the blockchain head
+   * @param callback          Callback function to receive matching posts
+   * @param error_callback    Error callback function
+   * @returns {Promise<void>}
+   */
+  processBlockChain: async function (block_number, callback, error_callback = null) {
+    steemhelper.last_processed_transaction_id = database.last_tx_id();
+    steemhelper.last_processed_block_number = database.last_parsed_block();
+    steemhelper.interrupted = database.was_interrupted();
+
+    if (typeof callback === "function") {
+      let iterator = await client.blockchain.getBlockNumbers(block_number);
+      steemhelper.processNextBlock(iterator, callback, error_callback);
+    } else {
+      throw "Callback is not a function";
+    }
+  },
+
+  /**
+   * Get a block and process its transactions
+   *
+   * @param iterator
+   * @param callback
+   * @param error_callback
+   * @returns {Promise<void>}
+   */
+  processNextBlock: async function (iterator, callback, error_callback) {
+    let current_block_number, previous_block_number;
+    while (true) {
+      try {
+        current_block_number = await iterator.next();
+        if (current_block_number.value < database.db.last_parsed_block()) {
+          if (steemhelper.config.mode.debug >= 2) {
+            logger.log(`[Debug][processTransaction]Skipped already processed block with number: ${current_block_number.value}`);
+          }
+          continue;
+        }
+        let block = await client.database.getBlock(current_block_number.value);
+        if (steemhelper.config.mode.debug >= 1) {
+          logger.log('[Debug][block_number]', current_block_number);
+          logger.log('[Debug][time_stamp]', block.timestamp);
+        }
+        block.transactions.forEach((transaction) => {
+          steemhelper.processTransaction(block.timestamp, transaction, callback)
+        });
+        previous_block_number = current_block_number.value;
+
+        database.db.update_last_block(previous_block_number);
+        database.db.save();
+
+        if (steemhelper.config.mode.debug >= 1) {
+          logger.log(`[Debug][Progress]Finished Processing block number ${previous_block_number}`);
+        }
       }
+      catch (error) {
+        logger.log("[Error][examine_block]", error);
+        logger.log("[Error][examine_block][current_block_number]", current_block_number.value);
+        logger.log("[Error][examine_block][previous_block_number]", previous_block_number.value);
+        if (typeof error_callback === 'function') {
+          error_callback();
+        }
+        else {
+          break;
+        }
+      }
+    }
+  },
 
-      const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.bot.steem.postingKey);
+  /**
+   * Extract operations from a transaction and process them
+   *
+   * @param blockTimestamp
+   * @param transaction
+   * @param callback
+   * @returns {Promise<void>}
+   */
+  processTransaction: async function (blockTimestamp, transaction, callback) {
+    let id = transaction.hasOwnProperty('transaction_id') ? transaction.transaction_id : null
+    if (steemhelper.progress.interrupted) {
+      if (steemhelper.config.mode.debug >= 2) {
+        logger.log(`[Debug][processTransaction]Skipped already processed transaction with ID: ${id}`);
+      }
+      if (steemhelper.progress.last_processed_transaction_id === id) {
+        steemhelper.progress.interrupted = false;
+        database.db.update_last_block(steemhelper.progress.last_processed_block_number);
+        database.db.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
+        database.db.update_interrupted(steemhelper.progress.interrupted);
+        database.db.save();
+      }
+    }
+    else {
+      transaction.operations.forEach((operation) => {
+        steemhelper.processOperation(blockTimestamp, operation, callback)
+      });
+      steemhelper.progress.last_processed_transaction_id = id;
+      database.db.update_last_block(steemhelper.progress.last_processed_block_number);
+      database.db.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
+      database.db.update_interrupted(steemhelper.progress.interrupted);
+      database.db.save();
+      if (steemhelper.config.mode.debug >= 2) {
+        logger.log(`[Debug][Progress]Finished Processing trasaction with ID ${id}`);
+      }
+    }
+  },
 
+  /**
+   * Search for "comment" type operations
+   *
+   * @param blockTimestamp
+   * @param operation
+   * @param callback
+   * @returns {Promise<void>}
+   */
+  processOperation: async function (blockTimestamp, operation, callback) {
+    if (operation && operation[0] && operation[0].toLowerCase() === 'comment' && operation[1]) {
+      if (typeof callback === 'function') {
+        callback(blockTimestamp, operation[1]);
+      }
+    }
+  },
+
+  /**
+   * Upvote a post
+   *
+   * @param author
+   * @param permlink
+   * @param weight
+   * @param callback
+   */
+  upvote: function (author, permlink, weight, callback) {
+    if (typeof weight === 'undefined') {
+      weight = 10000;
+    }
+
+    const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.bot.steem.postingKey);
+
+    (async function () {
       try {
         const result = await client.broadcast.vote({
           voter: steemhelper.config.bot.steem.account,
@@ -52,51 +170,69 @@ const steemhelper = {
           weight: weight
         }, postingKey);
 
-        resolve(result);
-      } catch(error) {
+        if (typeof callback === "function") {
+          callback(result);
+        }
+      } catch (error) {
         logger.log("[Error][broadcast_vote]", error);
 
-        if (error.jse_shortmsg.indexOf('You have already voted in a similar way')) {
+        if (error.indexOf('You have already voted in a similar way')) {
           logger.log("Already voted");
         }
-
-        reject(error);
       }
-    });
+    }());
   },
 
+  /**
+   * Comment on a post
+   *
+   * @param post
+   * @param comment
+   */
   comment: function(post, comment) {
     return new Promise(async function(resolve, reject) {
-      try {
-        if (post && comment) {
-          const permlink = steemhelper.formatter.commentPermlink(post.author, post.permlink);
-          const payload = {
-            author: 'teamvn',
-            permlink: permlink,
-            parent_author: post.author,
-            parent_permlink: post.permlink,
-            title: '',
-            body: comment,
-            json_metadata: "{\"tags\":[\""+ post.category +"\"],\"app\":\"teamvn-bot\"}"
-          };
-
-          const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.bot.steem.postingKey);
-          const res = await client.broadcast.comment(payload, postingKey);
-          logger.log("[success][steemcomment]", payload, res);
-          resolve({payload: payload, result: res});
-        }
-      } catch(err) {
-        logger.log("[error][comment]", err);
+      if (
+        !steemhelper.config.bot.steem.account
+        || steemhelper.config.bot.steem.postingKey
+        || steemhelper.config.bot.steem.account === ''
+        || steemhelper.config.bot.steem.postingKey === ''
+      ) {
+        let err = 'Missing posting key';
         reject(err);
+      } else {
+        try {
+          if (post && comment) {
+            const permlink = steemhelper.formatter.commentPermlink(post.author, post.permlink);
+            const payload = {
+              author: steemhelper.config.bot.steem.account,
+              permlink: permlink,
+              parent_author: post.author,
+              parent_permlink: post.permlink,
+              title: '',
+              body: comment,
+              json_metadata: "{\"tags\":[\"" + post.category + "\"],\"app\":\""+ steemhelper.config.bot.steem.account +"\"}"
+            };
+
+            const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.bot.steem.postingKey);
+            const res = await client.broadcast.comment(payload, postingKey);
+            logger.log("[success][steemcomment]", payload, res);
+
+            resolve({payload: payload, result: res});
+          }
+        } catch (err) {
+          reject(err);
+        }
       }
     });
   },
 
-  getAuthorPermlinkFromUrl: function(url) {
-    const authorPermlink = url.split('@').pop().split('/');
-    return {
-      author: authorPermlink[0],
-      permlink: authorPermlink[1]
+  getPost: async function(author, permlink) {
+    try {
+      const post = await client.database.call('get_content', [author, permlink]);
+      return post;
+    } catch(err) {
+      logger.log("[error][getcontent]", err);
+      return null;
     }
   }
 };

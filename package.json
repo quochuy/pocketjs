@@ -20,7 +20,8 @@
     "command-line-args": "^5.0.2",
     "dsteem": "^0.8.7",
     "fs": "0.0.1-security",
-    "lodash": "^4.17.5"
+    "lodash": "^4.17.5",
+    "md5": "^2.2.1"
   },
   "repository": {
     "type": "git",

@@ -1,7 +1,7 @@
-var constants = require("./constants");
-var fs = require('fs');
-var steemtools = require('./steemtools');
-var _ = require('lodash');
+const constants = require("./constants");
+const fs = require('fs');
+const _ = require('lodash');
+const val = require('./validator');
 
 Array.prototype.remove = function() {
   var what, a = arguments, L = a.length, ax;
@@ -21,6 +21,30 @@ var MistDB = {
 
   init: function() {
     this.load();
+  },
+
+  was_interrupted: function() {
+    if (!this.db.hasOwnProperty('interrupted')) {
+      this.db.interrupted = false;
+    }
+
+    return this.db.interrupted;
+  },
+
+  update_interrupted: function(interrupted) {
+    this.db.interrupted = interrupted;
+  },
+
+  update_last_tx_id: function(txid) {
+    this.db.last_processed_transaction_id = txid;
+  },
+
+  last_tx_id: function() {
+    if (!this.db.hasOwnProperty('last_processed_transaction_id')) {
+      this.db.last_processed_transaction_id = 0;
+    }
+
+    return this.db.last_processed_transaction_id;
   },
 
   update_last_block: function(lastBlock) {
@@ -175,10 +199,10 @@ var MistDB = {
 
   enqueue_for_confirmation: function(mist_op, op) {
     // mist_op is assumed to be valid
-    var ident = steemtools.commentPermlink(op[1]['author'],op[1]['permlink']),
+    var ident = val.constIdent(op[1]['author'],op[1]['permlink']),
         to_add = JSON.parse(JSON.stringify(mist_op));
 
-    if(mist_op.type == 'send') {
+    if(mist_op.type === 'send') {
       to_add.new_from_balance = this.get_account_balance(to_add.from_account);
       to_add.new_to_balance = this.get_account_balance(to_add.to_account);
     }

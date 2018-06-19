@@ -1,9 +1,8 @@
-var dsteem = require('dsteem');
-var client = new dsteem.Client('https://api.steemit.com');
+var steemHelper = require('./utils/steemhelper');
 var constants = require("./utils/constants");
 
 var app = {
-  config: require('./config'),
+  config: require('./config.json'),
   db: require('./utils/db'),
 
   run: function() {
