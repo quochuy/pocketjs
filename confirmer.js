@@ -1,5 +1,4 @@
 var steemHelper = require('./utils/steemhelper');
-var constants = require("./utils/constants");
 
 var app = {
   config: require('./config.json'),
@@ -7,7 +6,17 @@ var app = {
 
   run: function() {
     app.db.init();
+    steemHelper.processBlockChain(
+      23447023,
+      function(blockTimestamp, operation) {
+        console.log(blockTimestamp, operation);
+        process.exit();
+      },
 
+      function() {
+        console.log('[error]');
+      }
+    );
   }
 };
 

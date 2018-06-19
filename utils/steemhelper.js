@@ -1,6 +1,6 @@
-const dsteem = require('dsteem');
 const logger = require('./logger');
 const database = require('./db');
+const dsteem = require('dsteem');
 const client = new dsteem.Client('https://api.steemit.com');
 
 const steemhelper = {
@@ -56,7 +56,7 @@ const steemhelper = {
     while (true) {
       try {
         current_block_number = await iterator.next();
-        if (current_block_number.value < database.db.last_parsed_block()) {
+        if (current_block_number.value < database.last_parsed_block()) {
           if (steemhelper.config.mode.debug >= 2) {
             logger.log(`[Debug][processTransaction]Skipped already processed block with number: ${current_block_number.value}`);
           }
@@ -141,7 +141,7 @@ const steemhelper = {
   processOperation: async function (blockTimestamp, operation, callback) {
     if (operation && operation[0] && operation[0].toLowerCase() === 'comment' && operation[1]) {
       if (typeof callback === 'function') {
-        callback(blockTimestamp, operation[1]);
+        callback(blockTimestamp, operation);
       }
     }
   },

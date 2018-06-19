@@ -1,7 +1,7 @@
 const constants = require("./constants");
 const fs = require('fs');
 const _ = require('lodash');
-const val = require('./validator');
+const validator = require('./validator');
 
 Array.prototype.remove = function() {
   var what, a = arguments, L = a.length, ax;
@@ -14,7 +14,7 @@ Array.prototype.remove = function() {
   return this;
 };
 
-var MistDB = {
+const MistDB = {
   dbFname: 'db.json',
   db: null,
   outputLogs: true,
@@ -199,7 +199,7 @@ var MistDB = {
 
   enqueue_for_confirmation: function(mist_op, op) {
     // mist_op is assumed to be valid
-    var ident = val.constIdent(op[1]['author'],op[1]['permlink']),
+    var ident = validator.constIdent(op[1]['author'], op[1]['permlink']),
         to_add = JSON.parse(JSON.stringify(mist_op));
 
     if(mist_op.type === 'send') {
@@ -229,7 +229,7 @@ var MistDB = {
 
   get_ops_for_ident: function(parentIdent) {
     if (this.db.pending_confirmations.hasOwnProperty(parentIdent)) {
-      return this.db.pending_confirmations.parentIdent;
+      return this.db.pending_confirmations[parentIdent];
     }
 
     return null;

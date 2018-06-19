@@ -62,8 +62,7 @@ const validator = {
       "New sending account balance: (\\d+)\n" +
       "New receiving account balance: (\\d+)\n" +
       "Fee: (\\d+)\n" +
-      "Steem trxid: ([a-z0-9]+)\n" +
-      "Thanks for using POCKET! I am running this confirmer code.", "m");
+      "Steem trxid: ([a-z0-9]+)", "m");
 
     match = re.exec(body);
     if (match) {
@@ -96,12 +95,14 @@ const validator = {
     const extracted_op = validator.getConfirmPayload(body);
 
     if (extracted_op !== null) {
-      if (associated_ops.hasOwnProperty(extracted_op)) {
+      if (associated_ops.hasOwnProperty(extracted_op.trxid)) {
         const op_to_confirm = associated_ops[extracted_op.trxid];
+
         if (op_to_confirm.type !== 'genesis_confirm') {
           for (label in extracted_op) {
             if (extracted_op.hasOwnProperty(label)) {
-              if (extracted_op[label] !== op_to_confirm[label]) {
+
+              if (extracted_op.label !== op_to_confirm.label) {
                 // discrepancy found, so exit
                 return null;
               }
@@ -132,14 +133,90 @@ const validator = {
     return op[1].body.substr(0, validator.sendCommand.length) === validator.sendCommand;
   },
 
-  parseOP: function(op,trxid,DB) {
+  parseOP: function(op, trxid, database) {
+    let mist_op = null;
+
     if (op[0] === 'comment') {
+      if (validator.parentIsGenesis(op) || validator.isPocketSend(op)) {
+        const body = op[1].body;
 
+        if (body.indexOf(validator.sendCommand) === 0) {
+          const sendTup = validator.parseSend(body);
+          if (sendTup !== null) {
+            const fromAccount = op[1].author;
+             mist_op = {
+              type:'send',
+              toAccount: sendTup.toAccount,
+              fromAccount: fromAccount,
+              memo: sendTup.memo,
+              amount: sendTup.amount,
+              fee: constants.FEE,
+              trxid: trxid
+            };
+
+            return mist_op;
+          }
+        } else if (body.indexOf('confirm') === 0) {
+          mist_op = {
+            type:'genesis_confirm',
+            account: op[1].author,
+            fee: constants.FEE,
+            trxid: trxid
+          };
+
+          return mist_op;
+        }
+      } else { // check if it's a confirmation
+        const parentIdent = validator.constIdent(op[1]['parent_author'], op[1]['parent_permlink']);
+        const associated_ops = database.get_ops_for_ident(parentIdent);
+
+        // associated_ops is a dictionary of trixd:mist_op pairs
+        if (associated_ops !== null) {
+          mist_op = validator.parseConfirm(associated_ops, op, parentIdent);
+          return mist_op;
+        }
+      }
     } else if (op[0] === 'delete_comment') {
+      const ident = validator.constIdent(op[1]['author'],op[1].permlink);
+      const ops_to_confirm = database.get_ops_for_ident(ident); // unconfirmed ops associated with this ident
 
+      if (ops_to_confirm !== null)  {
+        const ops_to_remove = JSON.parse(JSON.stringify(ops_to_confirm));
+
+        for (trxid in ops_to_remove)  {
+          if (ops_to_remove.hasOwnProperty(trxid)) {
+            // return fee to receiving account because now confirmation is impossible
+            const op_to_confirm = ops_to_confirm.trxid;
+            let fee_credit_account = '';
+
+            if (op_to_confirm.type === 'send') {
+              fee_credit_account = op_to_confirm.to_account;
+            } else { // assume it's a genesis_confirm
+              fee_credit_account = op_to_confirm.account;
+            }
+
+            console.log('post deleted; crediting fee to ' + fee_credit_account);
+            database.increase_account_balance(fee_credit_account, op_to_confirm.fee);
+            database.remove_pending_confirmation(ident, op_to_confirm.trxid);
+          }
+        }
+      }
     }
 
-    return null;
+    return mist_op;
+  },
+
+  balance_to_string: function(balance_int) {
+    const balance_int_str = balance_int.toString();
+    let balance_str = '';
+
+    if (balance_int_str.length < 4) {
+      balance_str = '0.' + '0' * (3 - balance_int_str.length) + balance_int_str;
+    } else {
+      balance_str = balance_int_str.substr(0, -3) + '.' + balance_int_str.substr(-3);
+    }
+
+    return balance_str;
   }
 };
 
