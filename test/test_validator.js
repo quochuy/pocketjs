@@ -1,68 +1,68 @@
 const assert = require('assert');
-const val = require('../utils/validator');
+const validator = require('../utils/validator');
 const database = require('../utils/db');
 
 describe('Command validator', function() {
   describe('Send command', function () {
     it('should validate pocketsend:11@quochuy,with a nice memo', function () {
-      const send = val.parseSend('pocketsend:11@quochuy,with a nice memo');
+      const send = validator.parseSend('pocketsend:11@quochuy,with a nice memo');
       assert.equal(send.amount, 11);
       assert.equal(send.toAccount, 'quochuy');
       assert.equal(send.memo, 'with a nice memo');
     });
 
     it('should validate pocketsend:11@quochuy', function () {
-      const send = val.parseSend('pocketsend:11@quochuy');
+      const send = validator.parseSend('pocketsend:11@quochuy');
       assert.equal(send.amount, 11);
       assert.equal(send.toAccount, 'quochuy');
       assert.equal(send.memo, '');
     });
 
     it('should validate pocketsend:11@quochuy,', function () {
-      const send = val.parseSend('pocketsend:11@quochuy,');
+      const send = validator.parseSend('pocketsend:11@quochuy,');
       assert.equal(send.amount, 11);
       assert.equal(send.toAccount, 'quochuy');
       assert.equal(send.memo, '');
     });
 
     it('should validate pocketsend:11@quochuy with multiple lines', function () {
-      const send = val.parseSend("pocketsend:11@quochuy\nline2\nline3");
+      const send = validator.parseSend("pocketsend:11@quochuy\nline2\nline3");
       assert.equal(send.amount, 11);
       assert.equal(send.toAccount, 'quochuy');
       assert.equal(send.memo, '');
     });
 
     it('should validate pocketsend:11@quochuy,memo with multiple lines', function () {
-      const send = val.parseSend("pocketsend:11@quochuy,memo\nline2\nline3");
+      const send = validator.parseSend("pocketsend:11@quochuy,memo\nline2\nline3");
       assert.equal(send.amount, 11);
       assert.equal(send.toAccount, 'quochuy');
       assert.equal(send.memo, 'memo');
     });
 
     it('should not validate tokensend:11@quochuy', function () {
-      const send = val.parseSend('tokensend:11@quochuy');
+      const send = validator.parseSend('tokensend:11@quochuy');
       assert.equal(send, null);
     });
 
     it('should not validate pocketsend:abc@quochuy', function () {
-      const send = val.parseSend('pocketsend:anc@quochuy');
+      const send = validator.parseSend('pocketsend:anc@quochuy');
       assert.equal(send, null);
     });
 
     it('should not validate pocketsend:abc@1111', function () {
-      const send = val.parseSend('pocketsend:anc@1111');
+      const send = validator.parseSend('pocketsend:anc@1111');
       assert.equal(send, null);
     });
 
     it('should not validate pocketsend:11@quochuy$', function () {
-      const send = val.parseSend('pocketsend:anc@quochuy$');
+      const send = validator.parseSend('pocketsend:anc@quochuy$');
       assert.equal(send, null);
     });
   });
 
   describe('Confirm command', function () {
     it('should validate genesis claim', function () {
-      const send = val.getConfirmPayload(
+      const send = validator.getConfirmPayload(
         "Success! You claimed a genesis stake of 1000001.\n" +
         "trxid:39e9bdeaf8289984848aa26fc6c02eb27c6f7f5d\n" +
         "Thanks for using POCKET! I am running this confirmer code."
@@ -71,7 +71,7 @@ describe('Command validator', function() {
     });
 
     it('should validate valid confirmation comment', function () {
-      const send = val.getConfirmPayload(
+      const send = validator.getConfirmPayload(
         "Successful Send of 5001\n" +
         "Sending Account: mattclarke\n" +
         "Receiving Account: jarradlevi\n" +
@@ -83,8 +83,8 @@ describe('Command validator', function() {
       );
 
       assert.equal(send.amount, 5001);
-      assert.equal(send.from_account, "mattclarke");
-      assert.equal(send.to_account, "jarradlevi");
+      assert.equal(send.fromAccount, "mattclarke");
+      assert.equal(send.toAccount, "jarradlevi");
       assert.equal(send.new_from_balance, 1094031);
       assert.equal(send.new_to_balance, 5007);
       assert.equal(send.fee, 1);
@@ -92,7 +92,7 @@ describe('Command validator', function() {
     });
 
     it('should validate invalid confirmation comment', function () {
-      const send = val.getConfirmPayload(
+      const send = validator.getConfirmPayload(
         "Successful Send of 5001\n" +
         "Receiving Account: jarradlevi\n" +
         "New sending account balance: 1094031\n" +
@@ -104,7 +104,7 @@ describe('Command validator', function() {
     });
 
     it('should parse blockchain operation as a send commend', function () {
-      const result = val.parseOP(
+      const result = validator.parseOP(
         [ 'comment',
           { parent_author: 'gypsyfortune',
             parent_permlink: 'ooes2za4nwdg1vjk9mqzvvu1nv29ufou',
@@ -128,7 +128,7 @@ describe('Command validator', function() {
     });
 
     it('should parse as a send commend', function () {
-      const mist_op = val.parseOP(
+      const mist_op = validator.parseOP(
         [ 'comment',
           { parent_author: 'gypsyfortune',
             parent_permlink: 'ooes2za4nwdg1vjk9mqzvvu1nv29ufou',
@@ -162,7 +162,7 @@ describe('Command validator', function() {
           json_metadata: ''
         }
       ];
-      let mist_op = val.parseOP(
+      let mist_op = validator.parseOP(
         sendOp,
         '034a3d7828ce028e20fa6e4f5857299d606ca8aa',
         database
@@ -170,7 +170,7 @@ describe('Command validator', function() {
 
       database.enqueue_for_confirmation(mist_op, sendOp);
 
-      mist_op = val.parseOP(
+      mist_op = validator.parseOP(
         [ 'comment',
           { parent_author: 'pode',
             parent_permlink: 're-ninegagbot-this-is-not-a-diorama--it-s-a-real-island-full-of-people-who-survived-the-floods-in-malaysia--mpcyzh-20180618t234706793z',
