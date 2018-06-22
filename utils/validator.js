@@ -1,11 +1,10 @@
-const md5 = require('md5');
 const constants = require("./constants");
 
 const validator = {
   sendCommand: constants.TOKEN_NAME + 'send:',
 
   constIdent: function(author, permlink) {
-    return md5(author + permlink);
+    return "@" + author + "/" + permlink;
   },
 
   /**
@@ -68,8 +67,8 @@ const validator = {
     if (match) {
       return {
         amount: parseInt(match[1]),
-        from_account: match[2],
-        to_account: match[3],
+        fromAccount: match[2],
+        toAccount: match[3],
         new_from_balance: parseInt(match[4]),
         new_to_balance: parseInt(match[5]),
         fee: parseInt(match[6]),

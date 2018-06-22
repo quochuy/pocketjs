@@ -15,7 +15,7 @@ Array.prototype.remove = function() {
 };
 
 const MistDB = {
-  dbFname: 'db.json',
+  dbFname: __dirname + '/../db.json',
   db: null,
   outputLogs: true,
 
@@ -126,8 +126,8 @@ const MistDB = {
 
   add_send: function(mist_op) {
     var send_successful = false,
-        from_account = mist_op.from_account,
-        to_account = mist_op.to_account,
+        from_account = mist_op.fromAccount,
+        to_account = mist_op.toAccount,
         amount = mist_op.amount;
 
     if(amount > 0) {
@@ -135,21 +135,21 @@ const MistDB = {
         if(this.db.accounts[from_account].balance >= amount) {
           this.db.accounts[from_account].balance -= amount;
           send_successful = true;
-          this.log(amount + ' deducted from account ' + from_account);
+          this.log("[add_send] " + amount + ' deducted from account ' + from_account);
         } else {
-          this.log('insufficient balance in account ' + from_account);
+          this.log('[add_send] insufficient balance in account ' + from_account);
         }
       } else {
-        this.log('I have no record of account ' + from_account);
+        this.log('[add_send] I have no record of account ' + from_account);
       }
 
       if (send_successful) {
         if (_.has(this.db.accounts, [to_account, 'balance'])) {
           this.db.accounts[to_account].balance += amount - mist_op.fee;
-          this.log((amount - mist_op.fee) + ' added to account (1) ' + to_account);
+          this.log("[add_send] " + (amount - mist_op.fee) + ' added to account (1) ' + to_account);
         } else {
           this.db.accounts[to_account] = {balance: amount - mist_op.fee};
-          this.log((amount - mist_op.fee) + ' added to account (2) ' + to_account);
+          this.log("[add_send] " + (amount - mist_op.fee) + ' added to account (2) ' + to_account);
         }
       }
     }
@@ -203,12 +203,12 @@ const MistDB = {
         to_add = JSON.parse(JSON.stringify(mist_op));
 
     if(mist_op.type === 'send') {
-      to_add.new_from_balance = this.get_account_balance(to_add.from_account);
-      to_add.new_to_balance = this.get_account_balance(to_add.to_account);
+      to_add.new_from_balance = this.get_account_balance(to_add.fromAccount);
+      to_add.new_to_balance = this.get_account_balance(to_add.toAccount);
     }
 
     if (_.has(this.db.pending_confirmations, [ident, to_add.trxid])) {
-      this.pending_confirmations[ident][to_add.trxid] = to_add;
+      this.db.pending_confirmations[ident][to_add.trxid] = to_add;
     } else {
       this.db.pending_confirmations[ident] = {};
       this.db.pending_confirmations[ident][to_add.trxid] = to_add;
@@ -316,7 +316,7 @@ const MistDB = {
     try {
       this.db = JSON.parse(fs.readFileSync(fname, 'utf8'));
     } catch(e) {
-      this.log('db.json file missing, loading an empty DB');
+      this.log('db.json file missing, loading an empty DB', fname, e);
       this.reset();
     }
   },
@@ -330,7 +330,7 @@ const MistDB = {
       data = this.db;
     }
 
-    fs.writeFileSync(fname, data);
+    fs.writeFileSync(fname, JSON.stringify(data));
   },
 
   reset: function() {

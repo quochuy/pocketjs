@@ -68,15 +68,15 @@ const steemhelper = {
           logger.log('[Debug][time_stamp]', block.timestamp);
         }
         block.transactions.forEach((transaction) => {
-          steemhelper.processTransaction(block.timestamp, transaction, callback)
+          steemhelper.processTransaction(block.timestamp, current_block_number, transaction, callback)
         });
         previous_block_number = current_block_number.value;
 
-        database.db.update_last_block(previous_block_number);
-        database.db.save();
+        database.update_last_block(previous_block_number);
+        database.save();
 
         if (steemhelper.config.mode.debug >= 1) {
-          logger.log(`[Debug][Progress]Finished Processing block number ${previous_block_number}`);
+          logger.log(`[Debug][Progress] Finished Processing block number ${previous_block_number}`);
         }
       }
       catch (error) {
@@ -101,31 +101,31 @@ const steemhelper = {
    * @param callback
    * @returns {Promise<void>}
    */
-  processTransaction: async function (blockTimestamp, transaction, callback) {
-    let id = transaction.hasOwnProperty('transaction_id') ? transaction.transaction_id : null
+  processTransaction: async function (blockTimestamp, blockNumber, transaction, callback) {
+    let trxid = transaction.hasOwnProperty('transaction_id') ? transaction.transaction_id : null
     if (steemhelper.progress.interrupted) {
       if (steemhelper.config.mode.debug >= 2) {
-        logger.log(`[Debug][processTransaction]Skipped already processed transaction with ID: ${id}`);
+        logger.log(`[Debug][processTransaction]Skipped already processed transaction with ID: ${trxid}`);
       }
-      if (steemhelper.progress.last_processed_transaction_id === id) {
+      if (steemhelper.progress.last_processed_transaction_id === trxid) {
         steemhelper.progress.interrupted = false;
-        database.db.update_last_block(steemhelper.progress.last_processed_block_number);
-        database.db.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
-        database.db.update_interrupted(steemhelper.progress.interrupted);
-        database.db.save();
+        database.update_last_block(steemhelper.progress.last_processed_block_number);
+        database.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
+        database.update_interrupted(steemhelper.progress.interrupted);
+        database.save();
       }
     }
     else {
       transaction.operations.forEach((operation) => {
-        steemhelper.processOperation(blockTimestamp, operation, callback)
+        steemhelper.processOperation(blockTimestamp, operation, blockNumber, trxid, callback)
       });
-      steemhelper.progress.last_processed_transaction_id = id;
-      database.db.update_last_block(steemhelper.progress.last_processed_block_number);
-      database.db.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
-      database.db.update_interrupted(steemhelper.progress.interrupted);
-      database.db.save();
+      steemhelper.progress.last_processed_transaction_id = trxid;
+      database.update_last_block(steemhelper.progress.last_processed_block_number);
+      database.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
+      database.update_interrupted(steemhelper.progress.interrupted);
+      database.save();
       if (steemhelper.config.mode.debug >= 2) {
-        logger.log(`[Debug][Progress]Finished Processing trasaction with ID ${id}`);
+        logger.log(`[Debug][Progress] Finished Processing transaction with ID ${trxid}`);
       }
     }
   },
@@ -138,10 +138,10 @@ const steemhelper = {
    * @param callback
    * @returns {Promise<void>}
    */
-  processOperation: async function (blockTimestamp, operation, callback) {
+  processOperation: async function (blockTimestamp, operation, blockNumber, trxid, callback) {
     if (operation && operation[0] && operation[0].toLowerCase() === 'comment' && operation[1]) {
       if (typeof callback === 'function') {
-        callback(blockTimestamp, operation);
+        callback(blockTimestamp, operation, blockNumber, trxid);
       }
     }
   },
@@ -154,7 +154,7 @@ const steemhelper = {
    * @param weight
    * @param callback
    */
-  upvote: function (author, permlink, weight, callback) {
+  upvote: function (author, permlink, weight, callback, errorCallback) {
     if (typeof weight === 'undefined') {
       weight = 10000;
     }
@@ -178,6 +178,10 @@ const steemhelper = {
 
         if (error.indexOf('You have already voted in a similar way')) {
           logger.log("Already voted");
+        }
+
+        if (typeof errorCallback === "function") {
+          errorCallback(error);
         }
       }
     }());
@@ -224,6 +228,14 @@ const steemhelper = {
         }
       }
     });
+  },
+
+  getAuthorPermlinkFromUrl: function(url) {
+    const authorPermlink = url.split('@').pop().split('/');
+    return {
+      author: authorPermlink[0],
+      permlink: authorPermlink[1]
+    }
   },
 
   getPost: async function(author, permlink) {
