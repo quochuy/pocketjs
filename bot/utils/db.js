@@ -4,7 +4,7 @@ const _ = require('lodash');
 const validator = require('./validator');
 
 Array.prototype.remove = function() {
-  var what, a = arguments, L = a.length, ax;
+  let what, a = arguments, L = a.length, ax;
   while (L && this.length) {
     what = a[--L];
     while ((ax = this.indexOf(what)) !== -1) {
@@ -14,8 +14,26 @@ Array.prototype.remove = function() {
   return this;
 };
 
+/**
+ * Returns length of array or size of object
+ *
+ * @param object
+ * @returns {*}
+ */
+function objectSize(object) {
+  if (typeof object === "object") {
+    if (object instanceof Array) {
+      return object.length;
+    }
+
+    return Object.keys(object).length;
+  }
+
+  return null;
+}
+
 const MistDB = {
-  dbFname: __dirname + '/../db.json',
+  dbFname: __dirname + '/../database/db.json',
   db: null,
   outputLogs: true,
 
@@ -125,7 +143,7 @@ const MistDB = {
   },
 
   add_send: function(mist_op) {
-    var send_successful = false,
+    let send_successful = false,
         from_account = mist_op.fromAccount,
         to_account = mist_op.toAccount,
         amount = mist_op.amount;
@@ -183,23 +201,23 @@ const MistDB = {
   },
 
   add_op: function(mist_op) {
-    if(mist_op.type == 'send') {
+    if(mist_op.type === 'send') {
       return this.add_send(mist_op)
     }
 
-    if(mist_op.type == 'confirmation') {
+    if(mist_op.type === 'confirmation') {
       return this.add_confirmation(mist_op)
     }
 
     // this is a genesis confirmation request
-    if(mist_op.type == 'genesis_confirm') {
+    if(mist_op.type === 'genesis_confirm') {
       return this.add_genesis_confirm(mist_op)
     }
   },
 
   enqueue_for_confirmation: function(mist_op, op) {
     // mist_op is assumed to be valid
-    var ident = validator.constIdent(op[1]['author'], op[1]['permlink']),
+    const ident = validator.constIdent(op[1]['author'], op[1]['permlink']),
         to_add = JSON.parse(JSON.stringify(mist_op));
 
     if(mist_op.type === 'send') {
@@ -222,7 +240,10 @@ const MistDB = {
     }
 
     // then check if the ident can be removed as well:
-    if(this.db.pending_confirmations.hasOwnProperty(ident) && this.db.pending_confirmations[ident].length == 0) {
+    if(
+      this.db.pending_confirmations.hasOwnProperty(ident)
+      && objectSize(this.db.pending_confirmations[ident]) === 0
+    ) {
       delete this.db.pending_confirmations[ident];
     }
   },
@@ -238,11 +259,11 @@ const MistDB = {
   get_next_confirmation: function() {
     // return exactly one needed confirmation
     if (this.db.pending_confirmations.length > 0) {
-      var idents = Object.getOwnPropertyNames(this.db.pending_confirmations),
+      const idents = Object.getOwnPropertyNames(this.db.pending_confirmations),
           ident = idents[Math.floor(Math.random() * idents.length)];
 
-      if (this.db.pending_confirmations[ident].length > 0) {
-        var trxids = Object.getOwnPropertyNames(this.db.pending_confirmations[ident]),
+      if (objectSize(this.db.pending_confirmations[ident]) > 0) {
+        const trxids = Object.getOwnPropertyNames(this.db.pending_confirmations[ident]),
             trxid = trxids[Math.floor(Math.random() * trxids.length)];
 
         return this.db.pending_confirmations[ident][trxid];
@@ -271,10 +292,10 @@ const MistDB = {
   },
 
   get_total_supply: function() {
-    var total = 0;
+    let total = 0;
     for(account in this.db.accounts) {
       if (this.db.accounts.hasOwnProperty(account)) {
-        var balance = parseInt(this.get_account_balance(account));
+        let balance = parseInt(this.get_account_balance(account));
         total += balance;
       }
     }
@@ -284,7 +305,7 @@ const MistDB = {
 
   get_top_accounts: function(K) {
     // return list of accounts with K largest balances
-    var acctlist = [];
+    let acctlist = [];
     for(account in this.db.accounts) {
       if (this.db.accounts.hasOwnProperty(account)) {
         acctlist.push([account, this.get_account_balance(account)]);
@@ -297,7 +318,7 @@ const MistDB = {
 
   get_bottom_accounts: function(K) {
     // return list of accounts with K lowest balances
-    var acctlist = [];
+    let acctlist = [];
     for(account in this.db.accounts) {
       if (this.db.accounts.hasOwnProperty(account)) {
         acctlist.push([account, this.get_account_balance(account)]);
@@ -353,7 +374,7 @@ const MistDB = {
       return;
     }
 
-    var now = new Date();
+    const now = new Date();
     if (typeof arguments.unshift === 'undefined') {
       arguments[0] = '[' + now + '] ' + arguments[0];
     } else {

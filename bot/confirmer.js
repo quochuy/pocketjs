@@ -6,11 +6,12 @@ const constants = require('./utils/constants');
 const confirmation = require('./utils/confirmation');
 
 const app = {
-  config: require('./config.json'),
+  config: require('./config/config.json'),
   exitNow: false,
 
   gracefulExit: function(e) {
     console.log("Graceful exit", e);
+
     database.save();
     voter.save();
     app.exitNow = true;
@@ -114,8 +115,10 @@ const app = {
     // Run the pending confirmation processor every 21 seconds
     setInterval(app.processPendingConfirmations, 21000);
 
+    const from = database.last_parsed_block();
+
     steemHelper.processBlockChain(
-      23447023,
+      from || 23447023,
       function(blockTimestamp, operation, blockNumber, trxid) {
         if (database.active()) {
           app.processOperation(operation, blockNumber, trxid);

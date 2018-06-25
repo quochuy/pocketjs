@@ -1,10 +1,10 @@
 const logger = require('./logger');
 const database = require('./db');
 const dsteem = require('dsteem');
-const client = new dsteem.Client('https://api.steemit.com');
+const client = new dsteem.Client('http://seed01.steemulant.com:8090');
 
 const steemhelper = {
-  config: require('../config.json'),
+  config: require('../config/config.json'),
   progress: {},
   formatter: {
     /**

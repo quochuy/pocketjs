@@ -1,6 +1,6 @@
 const steemHelper = require('./steemhelper');
 const fs = require('fs');
-const config = require('../config.json');
+const config = require('../config/config.json');
 const validator = require('./validator');
 const logger = require('./logger');
 
@@ -16,7 +16,7 @@ Array.prototype.remove = function() {
 };
 
 const voter = {
-  dbFname: __dirname + '/../.votes.json',
+  dbFname: __dirname + '/../database/votes.json',
   votes_cast: null,
   pending_votes: [],
 

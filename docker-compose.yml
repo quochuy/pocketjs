@@ -1,0 +1,15 @@
+version: '3'
+services:
+  pocket:
+    build: .
+    image: quochuy/pocketjs:latest
+    container_name: pocketjs
+    volumes:
+      - ./bot/utils:/opt/pocketjs/utils:delegated
+      - ./bot/config:/opt/pocketjs/config:delegated
+      - ./bot/database:/opt/pocketjs/database:delegated
+      - ./bot/logs:/opt/pocketjs/logs:delegated
+      - ./bot/confirmer.js:/opt/pocketjs/confirmer.js
+      - ./bot/run.sh:/opt/pocketjs/run.sh
+    working_dir: /opt/pocketjs
+    command: bash run.sh
