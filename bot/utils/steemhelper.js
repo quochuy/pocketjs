@@ -1,5 +1,5 @@
 const logger = require('./logger');
-const database = require('./db');
+const database = require('./mistdb');
 const dsteem = require('dsteem');
 const client = new dsteem.Client('http://seed01.steemulant.com:8090');
 

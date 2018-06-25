@@ -1,7 +1,7 @@
 const steemHelper = require('./utils/steemhelper');
 const voter = require('./utils/voter');
 const validator = require('./utils/validator');
-const database = require('./utils/db');
+const database = require('./utils/mistdb');
 const constants = require('./utils/constants');
 const confirmation = require('./utils/confirmation');
 

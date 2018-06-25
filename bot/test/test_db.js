@@ -1,6 +1,6 @@
 var assert = require('assert');
 var constants = require('../utils/constants');
-var db = require('../utils/db');
+var db = require('../utils/mistdb');
 db.init();
 db.outputLogs = false;
 

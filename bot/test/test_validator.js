@@ -1,6 +1,6 @@
 const assert = require('assert');
 const validator = require('../utils/validator');
-const database = require('../utils/db');
+const database = require('../utils/mistdb');
 
 describe('Command validator', function() {
   describe('Send command', function () {
