@@ -1,7 +1,8 @@
 const logger = require('./logger');
 const database = require('./mistdb');
 const dsteem = require('dsteem');
-const client = new dsteem.Client('http://seed01.steemulant.com:8090');
+const client = new dsteem.Client('https://api.steemit.com');
+const _ = require('lodash');
 
 const steemhelper = {
   config: require('../config/config.json'),
@@ -21,6 +22,16 @@ const steemhelper = {
         .toLowerCase();
       parentPermlink = parentPermlink.replace(/(-\d{8}t\d{9}z)/g, "");
       return "re-" + parentAuthor + "-" + parentPermlink + "-" + timeStr;
+    },
+
+    sanitizePermlink: function(permlink) {
+      permlink = _.trim(permlink);
+      permlink = permlink.replace(/_|\s|\./, "-");
+      permlink = permlink.replace(/[^\w-]/, "");
+      permlink = permlink.replace(/[^a-zA-Z0-9-]/, "");
+      permlink = permlink.toLowerCase();
+
+      return permlink;
     }
   },
 
@@ -159,12 +170,12 @@ const steemhelper = {
       weight = 10000;
     }
 
-    const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.bot.steem.postingKey);
+    const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.confirmer_key);
 
     (async function () {
       try {
         const result = await client.broadcast.vote({
-          voter: steemhelper.config.bot.steem.account,
+          voter: steemhelper.config.confirmer_account,
           author: author,
           permlink: permlink,
           weight: weight
@@ -192,34 +203,47 @@ const steemhelper = {
    *
    * @param post
    * @param comment
+   * @param commentPermlink
    */
-  comment: function(post, comment) {
+  comment: function(post, comment, commentPermlink) {
     return new Promise(async function(resolve, reject) {
       if (
-        !steemhelper.config.bot.steem.account
-        || steemhelper.config.bot.steem.postingKey
-        || steemhelper.config.bot.steem.account === ''
-        || steemhelper.config.bot.steem.postingKey === ''
+        !steemhelper.config.confirmer_account
+        || steemhelper.config.confirmer_key
+        || steemhelper.config.confirmer_account === ''
+        || steemhelper.config.confirmer_key === ''
       ) {
         let err = 'Missing posting key';
         reject(err);
       } else {
         try {
           if (post && comment) {
-            const permlink = steemhelper.formatter.commentPermlink(post.author, post.permlink);
+            let permlink = '';
+            if (typeof commentPermlink !== "undefined") {
+              permlink = commentPermlink;
+            } else {
+              permlink = steemhelper.formatter.commentPermlink(post.author, post.permlink);
+            }
+
             const payload = {
-              author: steemhelper.config.bot.steem.account,
+              author: steemhelper.config.confirmer_account,
               permlink: permlink,
               parent_author: post.author,
               parent_permlink: post.permlink,
               title: '',
               body: comment,
-              json_metadata: "{\"tags\":[\"" + post.category + "\"],\"app\":\""+ steemhelper.config.bot.steem.account +"\"}"
+              json_metadata: "{\"tags\":[\"" + post.category + "\"],\"app\":\""+ steemhelper.config.confirmer_account +"\"}"
             };
 
-            const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.bot.steem.postingKey);
-            const res = await client.broadcast.comment(payload, postingKey);
-            logger.log("[success][steemcomment]", payload, res);
+            let res = {};
+            if (steemhelper.config.mode.debug === false) {
+              const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.confirmer_key);
+              res = await client.broadcast.comment(payload, postingKey);
+              logger.log("[success][steemcomment]", payload, res);
+            } else {
+              logger.log("[DEBUG][steemcomment]", payload);
+              res = {};
+            }
 
             resolve({payload: payload, result: res});
           }
@@ -230,6 +254,11 @@ const steemhelper = {
     });
   },
 
+  /**
+   * Extract author and permlink from a URI
+   * @param url
+   * @returns {{author: *, permlink: *}}
+   */
   getAuthorPermlinkFromUrl: function(url) {
     const authorPermlink = url.split('@').pop().split('/');
     return {
@@ -238,12 +267,34 @@ const steemhelper = {
     }
   },
 
+  /**
+   * Retreive the post data from the blockchain
+   * @param author
+   * @param permlink
+   * @returns {Promise<*>}
+   */
   getPost: async function(author, permlink) {
     try {
       const post = await client.database.call('get_content', [author, permlink]);
       return post;
     } catch(err) {
       logger.log("[error][getcontent]", err);
+      return null;
+    }
+  },
+
+  /**
+   * Retreive all replies of a post from the blockchain
+   * @param author
+   * @param permlink
+   * @returns {Promise<*>}
+   */
+  getReplies: async function(author, permlink) {
+    try {
+      const replies = await client.database.call('get_content_replies', [author, permlink]);
+      return replies;
+    } catch(err) {
+      logger.log("[error][get_content_replies]", err);
       return null;
     }
   }

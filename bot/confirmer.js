@@ -4,6 +4,7 @@ const validator = require('./utils/validator');
 const database = require('./utils/mistdb');
 const constants = require('./utils/constants');
 const confirmation = require('./utils/confirmation');
+const logger = require('./utils/logger');
 
 const app = {
   config: require('./config/config.json'),
@@ -96,6 +97,8 @@ const app = {
   },
 
   processPendingConfirmations: function() {
+    logger.log("process pending confirmation");
+
     if (app.config.confirmation_active && database.active()) {
       const confirm = database.get_next_confirmation();
 
