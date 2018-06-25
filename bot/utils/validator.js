@@ -69,8 +69,8 @@ const validator = {
         amount: parseInt(match[1]),
         fromAccount: match[2],
         toAccount: match[3],
-        new_from_balance: parseInt(match[4]),
-        new_to_balance: parseInt(match[5]),
+        newFromBalance: parseInt(match[4]),
+        newToBalance: parseInt(match[5]),
         fee: parseInt(match[6]),
         trxid: match[7]
       };

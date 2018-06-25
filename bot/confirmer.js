@@ -5,10 +5,13 @@ const database = require('./utils/mistdb');
 const constants = require('./utils/constants');
 const confirmation = require('./utils/confirmation');
 const logger = require('./utils/logger');
+const moment = require('moment');
 
 const app = {
   config: require('./config/config.json'),
   exitNow: false,
+  confirmationWaitTime: 21,
+  lastConfirmationTime: 0,
 
   gracefulExit: function(e) {
     console.log("Graceful exit", e);
@@ -82,6 +85,7 @@ const app = {
 
   postProcessing: function(blockNumber) {
     database.update_last_block(blockNumber);
+
     if (blockNumber % constants.SAVE_INTERVAL === 0) {
       database.save();
       voter.save();
@@ -97,13 +101,20 @@ const app = {
   },
 
   processPendingConfirmations: function() {
-    logger.log("process pending confirmation");
-
     if (app.config.confirmation_active && database.active()) {
-      const confirm = database.get_next_confirmation();
+      const today = moment(Date.now());
+      const diff = today.diff(app.lastConfirmationTime, 'seconds');
+      if (
+        app.lastConfirmationTime === 0
+        || diff >= app.confirmationWaitTime
+      ) {
+        logger.log("process pending confirmation");
+        const confirm = database.get_next_confirmation();
 
-      if (confirm !== null) {
-        confirmation.confirm_op(confirm[0], confirm[1], s, confirmer_account, confirm_message);
+        if (confirm !== null) {
+          confirmation.confirm_op(confirm[0], confirm[1]);
+          app.lastConfirmationTime = moment(Date.now());
+        }
       }
     }
   },
@@ -115,9 +126,6 @@ const app = {
     process.on('SIGINT', app.gracefulExit);
     process.on('uncaughtException', app.gracefulExit);
 
-    // Run the pending confirmation processor every 21 seconds
-    setInterval(app.processPendingConfirmations, 21000);
-
     const from = database.last_parsed_block();
 
     steemHelper.processBlockChain(
@@ -125,12 +133,12 @@ const app = {
       function(blockTimestamp, operation, blockNumber, trxid) {
         if (database.active()) {
           app.processOperation(operation, blockNumber, trxid);
-          app.processPendingConfirmations();
         } else { // Not active, we're pre-genesis
           app.processPreGenesisOperation(operation, blockNumber, trxid);
         }
 
         app.postProcessing(blockNumber);
+        app.processPendingConfirmations();
       },
 
       function() {

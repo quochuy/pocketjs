@@ -120,10 +120,10 @@ const steemhelper = {
       }
       if (steemhelper.progress.last_processed_transaction_id === trxid) {
         steemhelper.progress.interrupted = false;
-        database.update_last_block(steemhelper.progress.last_processed_block_number);
+        /*database.update_last_block(steemhelper.progress.last_processed_block_number);
         database.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
         database.update_interrupted(steemhelper.progress.interrupted);
-        database.save();
+        database.save();*/
       }
     }
     else {
@@ -131,10 +131,10 @@ const steemhelper = {
         steemhelper.processOperation(blockTimestamp, operation, blockNumber, trxid, callback)
       });
       steemhelper.progress.last_processed_transaction_id = trxid;
-      database.update_last_block(steemhelper.progress.last_processed_block_number);
+      /*database.update_last_block(steemhelper.progress.last_processed_block_number);
       database.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
       database.update_interrupted(steemhelper.progress.interrupted);
-      database.save();
+      database.save();*/
       if (steemhelper.config.mode.debug >= 2) {
         logger.log(`[Debug][Progress] Finished Processing transaction with ID ${trxid}`);
       }
@@ -208,10 +208,13 @@ const steemhelper = {
   comment: function(post, comment, commentPermlink) {
     return new Promise(async function(resolve, reject) {
       if (
-        !steemhelper.config.confirmer_account
-        || steemhelper.config.confirmer_key
-        || steemhelper.config.confirmer_account === ''
-        || steemhelper.config.confirmer_key === ''
+        steemhelper.config.mode.test === false
+        && (
+          !steemhelper.config.confirmer_account
+          || steemhelper.config.confirmer_key
+          || steemhelper.config.confirmer_account === ''
+          || steemhelper.config.confirmer_key === ''
+        )
       ) {
         let err = 'Missing posting key';
         reject(err);
@@ -232,7 +235,7 @@ const steemhelper = {
               parent_permlink: post.permlink,
               title: '',
               body: comment,
-              json_metadata: "{\"tags\":[\"" + post.category + "\"],\"app\":\""+ steemhelper.config.confirmer_account +"\"}"
+              json_metadata: "{\"tags\":[\"" + post.category + "\"],\"app\":\"pocketjs\"}"
             };
 
             let res = {};

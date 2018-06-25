@@ -2,20 +2,20 @@ const steemHelper = require('./steemhelper');
 const validator = require('./validator');
 const constants = require('./constants');
 const logger = require('./logger');
+const config = require('../config/config');
 
 /**
  * note: this module is only for stuff that deals with posting confirmations,
  * NOT validating them.
- *
- * @type {{labels: {amount: string, from_account: string, to_account: string, new_from_balance: string, new_to_balance: string, fee: string, trxid: string}, confirm_op: confirmation.confirm_op}}
+ * @type {{labels: {amount: string, fromAccount: string, toAccount: string, newFromBalance: string, newToBalance: string, fee: string, trxid: string}, str_labels: string[], format_amount: confirmation.format_amount, confirm_op: confirmation.confirm_op}}
  */
 const confirmation = {
   labels: {
     amount: "Successful Send of ",
-    from_account: "Sending Account: ",
-    to_account: "Receiving Account: ",
-    new_from_balance: "New sending account balance: ",
-    new_to_balance: "New receiving account balance: ",
+    fromAccount: "Sending Account: ",
+    toAccount: "Receiving Account: ",
+    newFromBalance: "New sending account balance: ",
+    newToBalance: "New receiving account balance: ",
     fee: "Fee: ",
     trxid: "Steem trxid: "
   },
@@ -31,7 +31,7 @@ const confirmation = {
     if (int_amount < 0) {
       throw "amount cannot be less than zero.";
     } else {
-      return int_amount.toString();
+      return int_amount;
     }
   },
 
@@ -39,12 +39,9 @@ const confirmation = {
    *
    * @param ident
    * @param needed_confirmation
-   * @param s
-   * @param confirmer_account
-   * @param confirm_message
    * @returns {Promise<void>}
    */
-  confirm_op: async function(ident, needed_confirmation, s, confirmer_account, confirm_message) {
+  confirm_op: async function(ident, needed_confirmation) {
     // first get a list of valid confirmations already posted to this ident
     const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident);
     const top_level = await steemHelper.getPost(authorPermlink.author, authorPermlink.permlink);
@@ -59,6 +56,8 @@ const confirmation = {
           const reply = replies[ri];
           possibleConfirmations.push(validator.getConfirmPayload(reply.body));
         }
+
+        console.log(possibleConfirmations);
 
         let found_match = false;
         // for each reply, I need to check if it corresponds to the one we need.
@@ -114,7 +113,7 @@ const confirmation = {
             body += 'trxid:' + needed_confirmation['trxid'] + '\n';
           }
 
-          body += confirm_message;
+          body += config.confirm_message;
 
           const confirmationPermlink = steemHelper.formatter.sanitizePermlink(
             're-' + top_level.author + '-' + needed_confirmation['trxid']
@@ -126,6 +125,8 @@ const confirmation = {
           } catch(err) {
             logger.log("[error][steemcomment]", err);
           }
+        } else {
+          logger.log("Transaction already confirmed");
         }
       }
     }

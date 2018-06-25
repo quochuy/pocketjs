@@ -85,8 +85,8 @@ describe('Command validator', function() {
       assert.equal(send.amount, 5001);
       assert.equal(send.fromAccount, "mattclarke");
       assert.equal(send.toAccount, "jarradlevi");
-      assert.equal(send.new_from_balance, 1094031);
-      assert.equal(send.new_to_balance, 5007);
+      assert.equal(send.newFromBalance, 1094031);
+      assert.equal(send.newToBalance, 5007);
       assert.equal(send.fee, 1);
       assert.equal(send.trxid, "5dfdddfb48bf29365867e98f4eea5aba200a3e44");
     });

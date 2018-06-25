@@ -221,8 +221,8 @@ const MistDB = {
         to_add = JSON.parse(JSON.stringify(mist_op));
 
     if(mist_op.type === 'send') {
-      to_add.new_from_balance = this.get_account_balance(to_add.fromAccount);
-      to_add.new_to_balance = this.get_account_balance(to_add.toAccount);
+      to_add.newFromBalance = this.get_account_balance(to_add.fromAccount);
+      to_add.newToBalance = this.get_account_balance(to_add.toAccount);
     }
 
     if (_.has(this.db.pending_confirmations, [ident, to_add.trxid])) {
@@ -258,16 +258,18 @@ const MistDB = {
 
   get_next_confirmation: function() {
     // return exactly one needed confirmation
-    if (this.db.pending_confirmations.length > 0) {
+    if (objectSize(this.db.pending_confirmations) > 0) {
       const idents = Object.getOwnPropertyNames(this.db.pending_confirmations),
-          ident = idents[Math.floor(Math.random() * idents.length)];
+        ident = idents[Math.floor(Math.random() * idents.length)];
 
       if (objectSize(this.db.pending_confirmations[ident]) > 0) {
         const trxids = Object.getOwnPropertyNames(this.db.pending_confirmations[ident]),
-            trxid = trxids[Math.floor(Math.random() * trxids.length)];
+          trxid = trxids[Math.floor(Math.random() * trxids.length)];
 
-        return this.db.pending_confirmations[ident][trxid];
+        return [ident, this.db.pending_confirmations[ident][trxid]];
       }
+    } else {
+      console.log("Nothing pending");
     }
 
     return null;
