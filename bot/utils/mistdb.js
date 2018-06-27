@@ -268,8 +268,6 @@ const MistDB = {
 
         return [ident, this.db.pending_confirmations[ident][trxid]];
       }
-    } else {
-      console.log("Nothing pending");
     }
 
     return null;

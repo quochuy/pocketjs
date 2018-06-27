@@ -6,6 +6,7 @@ const constants = require('./utils/constants');
 const confirmation = require('./utils/confirmation');
 const logger = require('./utils/logger');
 const moment = require('moment');
+const cache = require('./utils/cache');
 
 const app = {
   config: require('./config/config.json'),
@@ -108,10 +109,11 @@ const app = {
         app.lastConfirmationTime === 0
         || diff >= app.confirmationWaitTime
       ) {
-        logger.log("process pending confirmation");
         const confirm = database.get_next_confirmation();
 
         if (confirm !== null) {
+          logger.log("process pending confirmation");
+
           confirmation.confirm_op(confirm[0], confirm[1]);
           app.lastConfirmationTime = moment(Date.now());
         }
@@ -120,6 +122,7 @@ const app = {
   },
 
   run: function() {
+    cache.init('pocketjs', 3600000);
     database.init();
     voter.init();
 

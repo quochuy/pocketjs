@@ -210,15 +210,12 @@ const steemhelper = {
       if (
         steemhelper.config.mode.test === false
         && (
-          !steemhelper.config.confirmer_account
-          || steemhelper.config.confirmer_key
-          || steemhelper.config.confirmer_account === ''
-          || steemhelper.config.confirmer_key === ''
+          steemhelper.config.confirmer_account
+          && steemhelper.config.confirmer_key
+          && steemhelper.config.confirmer_account !== ''
+          && steemhelper.config.confirmer_key !== ''
         )
       ) {
-        let err = 'Missing posting key';
-        reject(err);
-      } else {
         try {
           if (post && comment) {
             let permlink = '';
@@ -239,12 +236,11 @@ const steemhelper = {
             };
 
             let res = {};
-            if (steemhelper.config.mode.debug === false) {
+            if (steemhelper.config.mode.test === false) {
               const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.confirmer_key);
               res = await client.broadcast.comment(payload, postingKey);
-              logger.log("[success][steemcomment]", payload, res);
             } else {
-              logger.log("[DEBUG][steemcomment]", payload);
+              logger.log("[error][steemcomment]", payload);
               res = {};
             }
 
@@ -253,6 +249,9 @@ const steemhelper = {
         } catch (err) {
           reject(err);
         }
+      } else {
+        let err = 'Missing posting key';
+        reject(err);
       }
     });
   },
