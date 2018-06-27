@@ -5,9 +5,9 @@ function define(name, value) {
   });
 }
 
-var tokenName = 'pocket';
-var genesisAccount = 'biophil';
-var genesisPermlink = 'genesis-' + tokenName;
+const tokenName = 'pocket';
+const genesisAccount = 'biophil';
+const genesisPermlink = 'genesis-' + tokenName;
 
 define("START_BLOCK", 1);
 define("GENESIS_INTERVAL", (14*24*60)*20); // 14 days, 20 blocks/minute);

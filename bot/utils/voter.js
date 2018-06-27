@@ -74,7 +74,7 @@ const voter = {
           authorPermlink.permlink,
           1000,
           function() {
-            console.log('voted for confirmation ' + ident_to_vote);
+            logger.log('voted for confirmation ' + ident_to_vote);
 
             voter.pending_votes.remove(ident_to_vote);
             voter.votes_cast.push(ident_to_vote);

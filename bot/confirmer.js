@@ -15,7 +15,7 @@ const app = {
   lastConfirmationTime: 0,
 
   gracefulExit: function(e) {
-    console.log("Graceful exit", e);
+    logger.log("Graceful exit", e);
 
     database.save();
     voter.save();
@@ -35,7 +35,7 @@ const app = {
 
     if (mist_op !== null) {
       const op_is_valid = database.add_op(mist_op); // adds if it's valid
-      console.log(JSON.stringify(mist_op) + " valid: " + op_is_valid.toString());
+      logger.log(JSON.stringify(mist_op) + " valid: " + op_is_valid.toString());
 
       if (op_is_valid) {
         if (mist_op.type !== 'confirmation') {
@@ -93,7 +93,7 @@ const app = {
     }
 
     if (blockNumber % 100000 === 0) {
-      console.log(blockNumber);
+      logger.log(blockNumber);
     }
 
     if (app.exitNow === true) {
@@ -145,7 +145,7 @@ const app = {
       },
 
       function() {
-        console.log('[error]');
+        logger.log('[error]');
       }
     );
   }

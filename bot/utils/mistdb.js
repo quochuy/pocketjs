@@ -2,6 +2,7 @@ const constants = require("./constants");
 const fs = require('fs');
 const _ = require('lodash');
 const validator = require('./validator');
+const logger = require('./logger');
 
 Array.prototype.remove = function() {
   let what, a = arguments, L = a.length, ax;
@@ -99,14 +100,14 @@ const MistDB = {
 
     this.db.pending_accounts = {};
 
-    this.log('GENESIS ACTIVATED!');
+    logger.log('GENESIS ACTIVATED!');
   },
 
   deactivate_genesis: function() {
     this.db['genesis_active'] = false;
     this.db['eligible_accounts'] = [];
 
-    this.log('GENESIS DEACTIVATED');
+    logger.log('GENESIS DEACTIVATED');
   },
 
   credit_genesis: function(account) {
@@ -126,19 +127,19 @@ const MistDB = {
   increase_account_balance: function(account, amount) {
     if (_.has(this.db.accounts, [account, 'balance'])) {
       this.db.accounts[account].balance += amount;
-      this.log(amount + ' added to account ' + account);
+      logger.log(amount + ' added to account ' + account);
     } else {
       this.db.accounts[account] = {balance: amount};
-      this.log(amount + ' added to account ' + account);
+      logger.log(amount + ' added to account ' + account);
     }
   },
 
   decrease_account_balance: function(account, amount) {
     if(this.get_account_balance(account) >= amount) {
       this.db.accounts[account].balance -= amount;
-      this.log(amount + ' deducted from account ' + account);
+      logger.log(amount + ' deducted from account ' + account);
     } else {
-      this.log('Insufficient balance in account ' + account);
+      logger.log('Insufficient balance in account ' + account);
     }
   },
 
@@ -153,21 +154,21 @@ const MistDB = {
         if(this.db.accounts[from_account].balance >= amount) {
           this.db.accounts[from_account].balance -= amount;
           send_successful = true;
-          this.log("[add_send] " + amount + ' deducted from account ' + from_account);
+          logger.log("[add_send] " + amount + ' deducted from account ' + from_account);
         } else {
-          this.log('[add_send] insufficient balance in account ' + from_account);
+          logger.log('[add_send] insufficient balance in account ' + from_account);
         }
       } else {
-        this.log('[add_send] I have no record of account ' + from_account);
+        logger.log('[add_send] I have no record of account ' + from_account);
       }
 
       if (send_successful) {
         if (_.has(this.db.accounts, [to_account, 'balance'])) {
           this.db.accounts[to_account].balance += amount - mist_op.fee;
-          this.log("[add_send] " + (amount - mist_op.fee) + ' added to account (1) ' + to_account);
+          logger.log("[add_send] " + (amount - mist_op.fee) + ' added to account (1) ' + to_account);
         } else {
           this.db.accounts[to_account] = {balance: amount - mist_op.fee};
-          this.log("[add_send] " + (amount - mist_op.fee) + ' added to account (2) ' + to_account);
+          logger.log("[add_send] " + (amount - mist_op.fee) + ' added to account (2) ' + to_account);
         }
       }
     }
@@ -337,7 +338,7 @@ const MistDB = {
     try {
       this.db = JSON.parse(fs.readFileSync(fname, 'utf8'));
     } catch(e) {
-      this.log('db.json file missing, loading an empty DB', fname, e);
+      logger.log('db.json file missing, loading an empty DB', fname, e);
       this.reset();
     }
   },
@@ -367,21 +368,6 @@ const MistDB = {
     this.db['genesis_in_block'] = -1;
     this.db['genesis_last_block'] = -1;
     this.save();
-  },
-
-  log: function() {
-    if (this.outputLogs === false) {
-      return;
-    }
-
-    const now = new Date();
-    if (typeof arguments.unshift === 'undefined') {
-      arguments[0] = '[' + now + '] ' + arguments[0];
-    } else {
-      arguments.unshift(now);
-    }
-    
-    console.log.apply(null, arguments);
   }
 };
 

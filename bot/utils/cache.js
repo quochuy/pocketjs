@@ -52,7 +52,6 @@ const cache = {
    */
   get: function(id, asObject) {
     const data = cache._cache.getSync(id);
-    console.log('dadsada', id, data);
 
     if (asObject && data) {
       return JSON.parse(data);

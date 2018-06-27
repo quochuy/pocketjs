@@ -1,4 +1,5 @@
 const constants = require("./constants");
+const logger = require("./logger");
 
 const validator = {
   sendCommand: constants.TOKEN_NAME + 'send:',
@@ -194,7 +195,7 @@ const validator = {
               fee_credit_account = op_to_confirm.account;
             }
 
-            console.log('post deleted; crediting fee to ' + fee_credit_account);
+            logger.log('post deleted; crediting fee to ' + fee_credit_account);
             database.increase_account_balance(fee_credit_account, op_to_confirm.fee);
             database.remove_pending_confirmation(ident, op_to_confirm.trxid);
           }
