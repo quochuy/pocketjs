@@ -5,6 +5,7 @@ services:
     image: quochuy/pocketjs:latest
     container_name: pocketjs
     volumes:
+      - ./bot/cache:/opt/pocketjs/cache:delegated
       - ./bot/utils:/opt/pocketjs/utils:delegated
       - ./bot/config:/opt/pocketjs/config:delegated
       - ./bot/database:/opt/pocketjs/database:delegated
