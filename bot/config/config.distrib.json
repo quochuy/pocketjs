@@ -1,19 +1,18 @@
 {
-  "steem": {
-    "rpcNodes": [
-      "https://rpc.buildteam.io",
-      "https://gtg.steem.house:8090",
-      "https://steemd.privex.io/",
-      "http://steemd.pevo.science/",
-      "http://steemd.minnowsupportproject.org/"
-    ],
-    "username": "",
-    "postingKey": ""
-  },
-
-  "pocket": {
-    "confirmMessage": "Thanks for using POCKET! I am running [this confirmer code.](https://github.com/quochuy/pocketks)",
-    "confirmationEnabled": false,
-    "voteOnValidConfirmation": false
+  "confirm_message": "Thanks for using [POCKET](https://steemit.com/pocket/@biophil/pocket-announcement)! I am running [Pocket-JS confirmer code.](https://github.com/quochuy/pocketjs)",
+  "confirmer_account": "",
+  "confirmer_key": "",
+  "confirmation_active": false,
+  "vote_on_valid_confs": false,
+  "nodes": [
+    "https://rpc.buildteam.io",
+    "https://gtg.steem.house:8090",
+    "https://steemd.privex.io/",
+    "https://steemd.pevo.science/",
+    "https://steemd.minnowsupportproject.org/"
+  ],
+  "mode": {
+    "test": false,
+    "debug": 1
   }
 }

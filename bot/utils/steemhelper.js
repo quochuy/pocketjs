@@ -93,7 +93,7 @@ const steemhelper = {
       catch (error) {
         logger.log("[Error][examine_block]", error);
         logger.log("[Error][examine_block][current_block_number]", current_block_number.value);
-        logger.log("[Error][examine_block][previous_block_number]", previous_block_number.value);
+        logger.log("[Error][examine_block][previous_block_number]", previous_block_number);
         if (typeof error_callback === 'function') {
           error_callback();
         }

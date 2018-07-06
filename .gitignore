@@ -2,3 +2,5 @@
 .db
 node_modules
 config.json
+bot/logs
+bot/cache
