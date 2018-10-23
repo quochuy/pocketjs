@@ -1,12 +1,44 @@
 const logger = require('./logger');
 const database = require('./mistdb');
 const dsteem = require('dsteem');
-const client = new dsteem.Client('https://api.steemit.com');
 const _ = require('lodash');
+let client;
 
 const steemhelper = {
   config: require('../config/config.json'),
   progress: {},
+
+  connectToRpcNode: async function() {
+    const nodes = [
+      "https://api.steemit.com",
+      "https://gtg.steem.house:8090",
+      "https://api.steemitstage.com",
+      "https://rpc.curiesteem.com",
+      "https://rpc.steemliberator.com"
+    ];
+
+    logger.log("Looking for a working RPC node");
+
+    for (let ni in nodes) {
+      const node = nodes[ni];
+      client = new dsteem.Client(node, {timeout: 10000});
+
+      try {
+        logger.log(`Trying ${node}`);
+
+        const currentBlockHeader = await client.blockchain.getCurrentBlockHeader();
+        if (currentBlockHeader !== null) {
+          logger.log("Working RPC node found");
+          return true;
+        }
+      } catch (err) {
+        logger.log(`Failed connecting to ${node}...`);
+      }
+    }
+
+    return false;
+  },
+
   formatter: {
     /**
      * Generate a new permlink for a comment based on the parent post
@@ -64,7 +96,9 @@ const steemhelper = {
    */
   processNextBlock: async function (iterator, callback, error_callback) {
     let current_block_number, previous_block_number;
-    while (true) {
+    let keepLooping = true;
+
+    while (keepLooping !== false) {
       try {
         current_block_number = await iterator.next();
         if (current_block_number.value < database.last_parsed_block()) {
@@ -89,16 +123,26 @@ const steemhelper = {
         if (steemhelper.config.mode.debug >= 1) {
           logger.log(`[Debug][Progress] Finished Processing block number ${previous_block_number}`);
         }
-      }
-      catch (error) {
+      } catch (error) {
         logger.log("[Error][examine_block]", error);
         logger.log("[Error][examine_block][current_block_number]", current_block_number.value);
         logger.log("[Error][examine_block][previous_block_number]", previous_block_number);
-        if (typeof error_callback === 'function') {
-          error_callback();
-        }
-        else {
-          break;
+
+        if (
+          error.message.indexOf("Cannot read property") !== -1
+          || error.message.indexOf("network timeout") !== -1
+          || error.message.indexOf("Internal Error") !== -1
+          || error.message.indexOf("HTTP 502") !== -1
+        ) {
+          keepLooping = await steemhelper.connectToRpcNode();
+          iterator = await client.blockchain.getBlockNumbers(lastProgress.last_processed_block_number);
+        } else {
+          if (typeof error_callback === 'function') {
+            error_callback(error);
+          }
+          else {
+            keepLooping = false;
+          }
         }
       }
     }
