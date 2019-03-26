@@ -4,3 +4,4 @@ node_modules
 config.json
 bot/logs
 bot/cache
+bot/database/*.p
