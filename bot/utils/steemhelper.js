@@ -2,34 +2,36 @@ const logger = require('./logger');
 const database = require('./mistdb');
 const dsteem = require('dsteem');
 const _ = require('lodash');
+const jussi = require('./steem-jussi');
 let client;
 
 const steemhelper = {
   config: require('../config/config.json'),
   progress: {},
+  blockIterator: null,
 
   connectToRpcNode: async function() {
     const nodes = [
       "https://api.steemit.com",
-      "https://gtg.steem.house:8090",
-      "https://api.steemitstage.com",
-      "https://rpc.curiesteem.com",
-      "https://rpc.steemliberator.com"
+      "https://api.steem.house",
+      "https://rpc.steemviz.com",
+      "https://steemd.minnowsupportproject.org",
+      "https://steemd.privex.io"
     ];
 
     logger.log("Looking for a working RPC node");
 
-    for (let ni in nodes) {
+    for (let ni=0; ni<nodes.length; ni++) {
       const node = nodes[ni];
       client = new dsteem.Client(node, {timeout: 10000});
 
       try {
         logger.log(`Trying ${node}`);
 
-        const currentBlockHeader = await client.blockchain.getCurrentBlockHeader();
-        if (currentBlockHeader !== null) {
+        const currentBlockNumber = await client.blockchain.getCurrentBlockNum();
+        if (currentBlockNumber !== null) {
           logger.log("Working RPC node found");
-          return true;
+          return currentBlockNumber;
         }
       } catch (err) {
         logger.log(`Failed connecting to ${node}...`);
@@ -68,83 +70,118 @@ const steemhelper = {
   },
 
   /**
-   * @param block_number      Start at this block number or start at the blockchain head
+   * @param startBlockNumber      Start at this block number or start at the blockchain head
    * @param callback          Callback function to receive matching posts
    * @param error_callback    Error callback function
+   * @param replayWithJussi   Use Jussi to batch block requests
    * @returns {Promise<void>}
    */
-  processBlockChain: async function (block_number, callback, error_callback = null) {
+  processBlockChain: async function (startBlockNumber, currentBlockNumber, callback, error_callback = null, replayWithJussi = false) {
     steemhelper.last_processed_transaction_id = database.last_tx_id();
     steemhelper.last_processed_block_number = database.last_parsed_block();
     steemhelper.interrupted = database.was_interrupted();
 
+    let replay = false;
+
     if (typeof callback === "function") {
-      let iterator = await client.blockchain.getBlockNumbers(block_number);
-      steemhelper.processNextBlock(iterator, callback, error_callback);
+      let keepLooping = true;
+      try {
+        while (keepLooping !== false) {
+          if (startBlockNumber < currentBlockNumber) {
+            replay = true;
+          }
+
+          let blocks;
+
+          if (replay === true && replayWithJussi === true) {
+            blocks = await jussi.getBlocks(startBlockNumber, 50);
+            startBlockNumber += blocks.length;
+          }  else {
+            blocks = await steemhelper.getNextBlocks(startBlockNumber);
+          }
+
+          for(let bi=0; bi<blocks.length; bi++) {
+            const block = blocks[bi];
+
+            if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
+              const blockNumber = block.transactions[0].block_num;
+
+              if (blockNumber.value < database.last_parsed_block()) {
+                if (steemhelper.config.mode.debug >= 2) {
+                  logger.log(`[Debug][processTransaction]Skipped already processed block with number: ${currentBlockNumber.value}`);
+                }
+              }
+              steemhelper.processBlock(block, callback, error_callback);
+            }
+          }
+        }
+      } catch(err) {
+        throw "Error fetching blocks " + err.message;
+      }
     } else {
       throw "Callback is not a function";
     }
+  },
+  
+  getNextBlocks: async function(block_number) {
+    if (steemhelper.blockIterator === null) {
+      steemhelper.blockIterator = await client.blockchain.getBlocks(block_number);
+    }
+
+    try {
+      const iteratorResponse = await steemhelper.blockIterator.next();
+      const block = iteratorResponse.value;
+
+      return [block];
+    } catch (error) {
+      logger.log("[Error][examine_block]", error);
+      logger.log("[Error][examine_block][current_block_number]", current_block_number.value);
+      logger.log("[Error][examine_block][previous_block_number]", previous_block_number);
+
+      if (
+        error.message.indexOf("Cannot read property") !== -1
+        || error.message.indexOf("network timeout") !== -1
+        || error.message.indexOf("Unable to acquire database lock") !== -1
+        || error.message.indexOf("Internal Error") !== -1
+        || error.message.indexOf("HTTP 50") !== -1
+      ) {
+        currentBlockNumber = await steemhelper.connectToRpcNode();
+        if (currentBlockNumber) {
+          steemhelper.blockIterator = await client.blockchain.getBlocks(database.last_parsed_block());
+        } else {
+          throw "Lost connection to RPC and cannot reconnect";
+        }
+      } else {
+        throw `Unknown error ${e.message}`;
+      }
+    }
+
   },
 
   /**
    * Get a block and process its transactions
    *
-   * @param iterator
    * @param callback
    * @param error_callback
    * @returns {Promise<void>}
    */
-  processNextBlock: async function (iterator, callback, error_callback) {
-    let current_block_number, previous_block_number;
-    let keepLooping = true;
+  processBlock: async function (block, callback, error_callback) {
+    const blockNumber = block.transactions[0].block_num;
+    if (steemhelper.config.mode.debug >= 1) {
+      logger.log('[Debug][block_number]', blockNumber);
+      logger.log('[Debug][time_stamp]', block.timestamp);
+    }
 
-    while (keepLooping !== false) {
-      try {
-        current_block_number = await iterator.next();
-        if (current_block_number.value < database.last_parsed_block()) {
-          if (steemhelper.config.mode.debug >= 2) {
-            logger.log(`[Debug][processTransaction]Skipped already processed block with number: ${current_block_number.value}`);
-          }
-          continue;
-        }
-        let block = await client.database.getBlock(current_block_number.value);
-        if (steemhelper.config.mode.debug >= 1) {
-          logger.log('[Debug][block_number]', current_block_number);
-          logger.log('[Debug][time_stamp]', block.timestamp);
-        }
-        block.transactions.forEach((transaction) => {
-          steemhelper.processTransaction(block.timestamp, current_block_number, transaction, callback)
-        });
-        previous_block_number = current_block_number.value;
+    block.transactions.forEach((transaction) => {
+      steemhelper.processTransaction(block.timestamp, blockNumber, transaction, callback)
+    });
+    previous_block_number = blockNumber;
 
-        database.update_last_block(previous_block_number);
-        database.save();
+    database.update_last_block(previous_block_number);
+    database.save();
 
-        if (steemhelper.config.mode.debug >= 1) {
-          logger.log(`[Debug][Progress] Finished Processing block number ${previous_block_number}`);
-        }
-      } catch (error) {
-        logger.log("[Error][examine_block]", error);
-        logger.log("[Error][examine_block][current_block_number]", current_block_number.value);
-        logger.log("[Error][examine_block][previous_block_number]", previous_block_number);
-
-        if (
-          error.message.indexOf("Cannot read property") !== -1
-          || error.message.indexOf("network timeout") !== -1
-          || error.message.indexOf("Internal Error") !== -1
-          || error.message.indexOf("HTTP 502") !== -1
-        ) {
-          keepLooping = await steemhelper.connectToRpcNode();
-          iterator = await client.blockchain.getBlockNumbers(lastProgress.last_processed_block_number);
-        } else {
-          if (typeof error_callback === 'function') {
-            error_callback(error);
-          }
-          else {
-            keepLooping = false;
-          }
-        }
-      }
+    if (steemhelper.config.mode.debug >= 1) {
+      logger.log(`[Debug][Progress] Finished Processing block number ${previous_block_number}`);
     }
   },
 
@@ -194,7 +231,14 @@ const steemhelper = {
    * @returns {Promise<void>}
    */
   processOperation: async function (blockTimestamp, operation, blockNumber, trxid, callback) {
-    if (operation && operation[0] && operation[0].toLowerCase() === 'comment' && operation[1]) {
+    if (
+      operation
+      && operation[0]
+      && (
+        operation[0].toLowerCase() === 'comment'
+        || operation[0].toLowerCase() === 'custom_json'
+      )
+      && operation[1]) {
       if (typeof callback === 'function') {
         callback(blockTimestamp, operation, blockNumber, trxid);
       }

@@ -95,8 +95,8 @@ const MistDB = {
     this.db.genesis_in_block = block;
     this.db.genesis_last_block = block + constants.GENESIS_INTERVAL;
 
-    this.save('pending_backup.p', this.db.pending_accounts);
-    this.save('eligible_backup.p', this.db.eligible_accounts);
+    this.save(__dirname + '/../database/pending_backup.p', this.db.pending_accounts);
+    this.save(__dirname + '/../database/eligible_backup.p', this.db.eligible_accounts);
 
     this.db.pending_accounts = {};
 
@@ -187,12 +187,12 @@ const MistDB = {
   },
 
   add_genesis_confirm: function(mist_op) {
-    account = mist_op.account;
+    const account = mist_op.account;
     if(
       this.db.pending_genesis_confirms.indexOf(account) !== -1
       && this.get_account_balance(account) > mist_op.fee
     ) {
-      this.decrease_account_balance(account,mist_op.fee);
+      this.decrease_account_balance(account, mist_op.fee);
       this.db.pending_genesis_confirms.remove(account);
 
       return true;
@@ -212,6 +212,7 @@ const MistDB = {
 
     // this is a genesis confirmation request
     if(mist_op.type === 'genesis_confirm') {
+      console.log("Genesis confirmation found");
       return this.add_genesis_confirm(mist_op)
     }
   },
@@ -275,7 +276,7 @@ const MistDB = {
   },
 
   is_eligible: function(account) {
-    return account in this.db.eligible_accounts.indexOf(account) !== -1;
+    return this.db.eligible_accounts.indexOf(account) !== -1;
   },
 
   increment_comment_count: function(account) {

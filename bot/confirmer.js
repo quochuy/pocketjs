@@ -13,9 +13,15 @@ const app = {
   exitNow: false,
   confirmationWaitTime: 21,
   lastConfirmationTime: 0,
+  cliOptionsDefinitions: [
+    { name: 'replay-from-genesis', alias: 'g', type: Boolean },
+    { name: 'replay-from-0', alias: 'z', type: Boolean },
+    { name: 'use-jussi', alias: 'j', type: Boolean }
+  ],
+  cliOptions: null,
 
   gracefulExit: function(e) {
-    logger.log("Graceful exit", e);
+    logger.log("Graceful exit");
 
     database.save();
     voter.save();
@@ -47,15 +53,19 @@ const app = {
     }
 
     if (database.genesis_active()) {
-      if (database.past_genesis_interval(this_block)) {
+      if (database.past_genesis_interval(blockNumber)) {
         database.deactivate_genesis()
       } else {
         // watch for reblogs of genesis post
         if (operation[0] === 'custom_json') {
-          payload = json.loads(operation[1].json)
+          // Payload will contain the data from the post being reblogged
+          const payload = JSON.parse(operation[1].json);
           if (payload[0] === 'reblog') {
+            // Validating that the user is reblogging the genesis post
             if (payload[1].author === constants.GENESIS_ACCOUNT) {
               if (payload[1].permlink === 'genesis-' + constants.TOKEN_NAME) {
+
+                logger.log("Genesis post reblogged by", payload[1].account);
                 if (database.is_eligible(payload[1].account)) {
                   database.credit_genesis(payload[1].account);
                 }
@@ -67,15 +77,18 @@ const app = {
     }
   },
 
-  processPreGenesisOperation: function(operation, blockNumber, trxid) {
+  processPreGenesisOperation: function(operation, blockNumber) {
     if (operation[0] === 'comment') {
       if(!database.is_eligible(operation[1].author)) {
+        logger.log(operation[1].author, 'not eligible yet');
         database.increment_comment_count(operation[1].author)
       }
 
       // watch for genesis activation
       if (operation[1].author === constants.GENESIS_ACCOUNT) {
+        console.log(operation[1].author, 'is genesis account');
         if (operation[1].title === 'genesis-'+constants.TOKEN_NAME) {
+          logger.log("Genesis post found, activating DB");
           database.activate_genesis(blockNumber);
           database.activate();
           database.credit_genesis(constants.GENESIS_ACCOUNT);
@@ -121,32 +134,58 @@ const app = {
     }
   },
 
-  run: function() {
-    cache.init('pocketjs', 3600000);
-    database.init();
-    voter.init();
+  run: async function() {
+    logger.log("===== INIT =====");
+    let startupBehavior = 'normal';
+    const commandLineArgs = require('command-line-args');
+
+    const currentBlockNumber = await steemHelper.connectToRpcNode();
+    if (!currentBlockNumber) {
+      app.gracefulExit();
+    }
+
+    logger.log("===== CONNECTED =====");
 
     process.on('SIGINT', app.gracefulExit);
     process.on('uncaughtException', app.gracefulExit);
 
-    const from = database.last_parsed_block();
+    cache.init('pocketjs', 3600000);
+    database.init();
+    voter.init();
+
+    app.cliOptions = commandLineArgs(app.cliOptionsDefinitions);
+    if (app.cliOptions["replay-from-genesis"] === true) {
+      console.log('Replaying from genesis, loading pre-built DB...');
+      database.load('./database/db_pregenesis.json');
+      database.save();
+    } else if (app.cliOptions["replay-from-0"] === true) {
+      database.reset();
+    }
+
+    //process.exit();
+
+    const lastParsedBlock = database.last_parsed_block();
+    logger.log("Processing blocks from #" + lastParsedBlock);
+
+    logger.log("===== START =====");
 
     steemHelper.processBlockChain(
-      from || 23447023,
-      function(blockTimestamp, operation, blockNumber, trxid) {
+      lastParsedBlock || 1,
+      currentBlockNumber,
+      function(blockTimestamp, operation, block, trxid) {
         if (database.active()) {
-          app.processOperation(operation, blockNumber, trxid);
+          app.processOperation(operation, block.value, trxid);
         } else { // Not active, we're pre-genesis
-          app.processPreGenesisOperation(operation, blockNumber, trxid);
+          app.processPreGenesisOperation(operation, block.value, trxid);
         }
 
-        app.postProcessing(blockNumber);
+        app.postProcessing(block.value);
         app.processPendingConfirmations();
       },
-
       function() {
         logger.log('[error]');
-      }
+      },
+      app.cliOptions["use-jussi"] === true
     );
   }
 };
