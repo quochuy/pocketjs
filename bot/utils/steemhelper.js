@@ -3,6 +3,7 @@ const database = require('./mistdb');
 const dsteem = require('dsteem');
 const _ = require('lodash');
 const jussi = require('./steem-jussi');
+const tools = require('./tools');
 let client;
 
 const steemhelper = {
@@ -10,35 +11,84 @@ const steemhelper = {
   progress: {},
   blockIterator: null,
 
-  connectToRpcNode: async function() {
-    const nodes = [
-      "https://api.steemit.com",
-      "https://api.steem.house",
-      "https://rpc.steemviz.com",
-      "https://steemd.minnowsupportproject.org",
-      "https://steemd.privex.io"
-    ];
+  firstNodeToRespond: function(nodes) {
+    return new Promise(function(resolve, reject) {
+      let nbFailed = 0;
+      nodes.forEach(function(node) {
+        node.promise
+          .then(function(currentBlockNumber) {
+            node.currentBlockNum = currentBlockNumber;
+            resolve(node);
+          })
+          .catch(function(node) {
+            return function() {
+              nbFailed++;
+              logger.log(`Failed connecting to ${node.name}`);
+              if(nbFailed === nodes.length) {
+                reject();
+              }
+            }
+          }(node))
+      });
+    });
+  },
 
-    logger.log("Looking for a working RPC node");
+  /**
+   *
+   * @param logger.log
+   * @returns {Promise}
+   */
+  connectToRpcNode: function() {
+    return new Promise(async function(resolve, reject) {
+      let nodes = [
+        "https://api.steemit.com",
+        "https://api.steem.house",
+        "https://rpc.steemviz.com",
+        "https://steemd.minnowsupportproject.org",
+        "https://anyx.io"
+      ];
 
-    for (let ni=0; ni<nodes.length; ni++) {
-      const node = nodes[ni];
-      client = new dsteem.Client(node, {timeout: 10000});
+      nodes = tools.shuffle(nodes);
 
-      try {
+      logger.log("Looking for a working RPC node");
+
+      steemhelper.rpcConnected = false;
+      let pendingNodes = [];
+
+      for (let ni=0; ni<nodes.length; ni++) {
+        const node = nodes[ni];
+        const localClient = new dsteem.Client(node, {timeout: 10000});
+
         logger.log(`Trying ${node}`);
 
-        const currentBlockNumber = await client.blockchain.getCurrentBlockNum();
-        if (currentBlockNumber !== null) {
-          logger.log("Working RPC node found");
-          return currentBlockNumber;
-        }
-      } catch (err) {
-        logger.log(`Failed connecting to ${node}...`);
+        pendingNodes.push({
+          name: node,
+          client: localClient,
+          promise: localClient.blockchain.getCurrentBlockNum()
+        });
       }
-    }
 
-    return false;
+      try {
+        let selectedNode = await steemhelper.firstNodeToRespond(pendingNodes);
+        if (selectedNode.currentBlockNum !== null) {
+          logger.log(`Connected to ${selectedNode.name}`);
+          logger.log(`Head block number: ${selectedNode.currentBlockNum}`);
+
+          client = selectedNode.client;
+          steemhelper.rpcConnected = true;
+
+          resolve({
+            rpc: selectedNode.name,
+            currentBlockNum: selectedNode.currentBlockNum
+          });
+        } else {
+          reject("Failed fetching current block number");
+        }
+      } catch(err) {
+        console.log(err);
+        reject("Failed connecting to RPC");
+      }
+    });
   },
 
   formatter: {
@@ -72,11 +122,10 @@ const steemhelper = {
   /**
    * @param startBlockNumber      Start at this block number or start at the blockchain head
    * @param callback          Callback function to receive matching posts
-   * @param error_callback    Error callback function
    * @param replayWithJussi   Use Jussi to batch block requests
    * @returns {Promise<void>}
    */
-  processBlockChain: async function (startBlockNumber, currentBlockNumber, callback, error_callback = null, replayWithJussi = false) {
+  processBlockChain: async function (startBlockNumber, currentBlockNumber, callback, replayWithJussi = false) {
     steemhelper.last_processed_transaction_id = database.last_tx_id();
     steemhelper.last_processed_block_number = database.last_parsed_block();
     steemhelper.interrupted = database.was_interrupted();
@@ -111,7 +160,7 @@ const steemhelper = {
                   logger.log(`[Debug][processTransaction]Skipped already processed block with number: ${currentBlockNumber.value}`);
                 }
               }
-              steemhelper.processBlock(block, callback, error_callback);
+              steemhelper.processBlock(block, callback);
             }
           }
         }
@@ -162,10 +211,9 @@ const steemhelper = {
    * Get a block and process its transactions
    *
    * @param callback
-   * @param error_callback
    * @returns {Promise<void>}
    */
-  processBlock: async function (block, callback, error_callback) {
+  processBlock: async function (block, callback) {
     const blockNumber = block.transactions[0].block_num;
     if (steemhelper.config.mode.debug >= 1) {
       logger.log('[Debug][block_number]', blockNumber);
@@ -201,10 +249,6 @@ const steemhelper = {
       }
       if (steemhelper.progress.last_processed_transaction_id === trxid) {
         steemhelper.progress.interrupted = false;
-        /*database.update_last_block(steemhelper.progress.last_processed_block_number);
-        database.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
-        database.update_interrupted(steemhelper.progress.interrupted);
-        database.save();*/
       }
     }
     else {
@@ -212,10 +256,6 @@ const steemhelper = {
         steemhelper.processOperation(blockTimestamp, operation, blockNumber, trxid, callback)
       });
       steemhelper.progress.last_processed_transaction_id = trxid;
-      /*database.update_last_block(steemhelper.progress.last_processed_block_number);
-      database.update_last_tx_id(steemhelper.progress.last_processed_transaction_id);
-      database.update_interrupted(steemhelper.progress.interrupted);
-      database.save();*/
       if (steemhelper.config.mode.debug >= 2) {
         logger.log(`[Debug][Progress] Finished Processing transaction with ID ${trxid}`);
       }

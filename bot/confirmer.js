@@ -114,6 +114,17 @@ const app = {
     }
   },
 
+  processFoundOperation: function(blockTimestamp, operation, block, trxid) {
+    if (database.active()) {
+      app.processOperation(operation, block.value, trxid);
+    } else { // Not active, we're pre-genesis
+      app.processPreGenesisOperation(operation, block.value, trxid);
+    }
+
+    app.postProcessing(block.value);
+    app.processPendingConfirmations();
+  },
+
   processPendingConfirmations: function() {
     if (app.config.confirmation_active && database.active()) {
       const today = moment(Date.now());
@@ -139,54 +150,44 @@ const app = {
     let startupBehavior = 'normal';
     const commandLineArgs = require('command-line-args');
 
-    const currentBlockNumber = await steemHelper.connectToRpcNode();
-    if (!currentBlockNumber) {
-      app.gracefulExit();
+    try {
+      const currentBlockNumber = await steemHelper.connectToRpcNode();
+      if (!currentBlockNumber) {
+        app.gracefulExit();
+      }
+
+      logger.log("===== CONNECTED =====");
+
+      process.on('SIGINT', app.gracefulExit);
+      process.on('uncaughtException', app.gracefulExit);
+
+      cache.init('pocketjs', 3600000);
+      database.init();
+      voter.init();
+
+      app.cliOptions = commandLineArgs(app.cliOptionsDefinitions);
+      if (app.cliOptions["replay-from-genesis"] === true) {
+        console.log('Replaying from genesis, loading pre-built DB...');
+        database.load('./database/db_pregenesis.json');
+        database.save();
+      } else if (app.cliOptions["replay-from-0"] === true) {
+        database.reset();
+      }
+
+      const lastParsedBlock = database.last_parsed_block();
+      logger.log("Processing blocks from #" + lastParsedBlock);
+
+      logger.log("===== START =====");
+
+      steemHelper.processBlockChain(
+        lastParsedBlock || 1,
+        currentBlockNumber,
+        app.processFoundOperation,
+        app.cliOptions["use-jussi"] === true
+      );
+    } catch(err) {
+      logger.log("[error]", err);
     }
-
-    logger.log("===== CONNECTED =====");
-
-    process.on('SIGINT', app.gracefulExit);
-    process.on('uncaughtException', app.gracefulExit);
-
-    cache.init('pocketjs', 3600000);
-    database.init();
-    voter.init();
-
-    app.cliOptions = commandLineArgs(app.cliOptionsDefinitions);
-    if (app.cliOptions["replay-from-genesis"] === true) {
-      console.log('Replaying from genesis, loading pre-built DB...');
-      database.load('./database/db_pregenesis.json');
-      database.save();
-    } else if (app.cliOptions["replay-from-0"] === true) {
-      database.reset();
-    }
-
-    //process.exit();
-
-    const lastParsedBlock = database.last_parsed_block();
-    logger.log("Processing blocks from #" + lastParsedBlock);
-
-    logger.log("===== START =====");
-
-    steemHelper.processBlockChain(
-      lastParsedBlock || 1,
-      currentBlockNumber,
-      function(blockTimestamp, operation, block, trxid) {
-        if (database.active()) {
-          app.processOperation(operation, block.value, trxid);
-        } else { // Not active, we're pre-genesis
-          app.processPreGenesisOperation(operation, block.value, trxid);
-        }
-
-        app.postProcessing(block.value);
-        app.processPendingConfirmations();
-      },
-      function() {
-        logger.log('[error]');
-      },
-      app.cliOptions["use-jussi"] === true
-    );
   }
 };
 
