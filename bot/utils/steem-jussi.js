@@ -18,13 +18,17 @@ const jussi = {
 
       rp(options)
         .then(function (response) {
-          const blocks = [];
-          for(let ri=0; ri<response.length; ri++) {
-            const result = response[ri];
-            blocks.push(result.result);
-          }
+          if (response.hasOwnProperty('error')) {
+            reject(response.error.message);
+          } else {
+            const blocks = [];
+            for(let ri=0; ri<response.length; ri++) {
+              const result = response[ri];
+              blocks.push(result.result);
+            }
 
-          resolve(blocks);
+            resolve(blocks);
+          }
         })
         .catch(reject);
     });
