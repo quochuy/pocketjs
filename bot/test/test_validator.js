@@ -2,6 +2,8 @@ const assert = require('assert');
 const validator = require('../utils/validator');
 const database = require('../utils/mistdb');
 
+database.load('./database/db_test.json');
+
 describe('Command validator', function() {
   describe('Send command', function () {
     it('should validate pocketsend:11@quochuy,with a nice memo', function () {
@@ -189,6 +191,25 @@ describe('Command validator', function() {
       assert.equal(mist_op.confirmer, 'steemulant');
       assert.equal(mist_op.fee, 1);
       assert.equal(mist_op.associated_trxid, '034a3d7828ce028e20fa6e4f5857299d606ca8aa');
+    });
+  });
+
+  describe('Confirm command', function () {
+    it('should add to pending genesis confirm on reblog', function () {
+      // Verify that the user is not already pending genesis confirm
+      assert.equal(database.db.pending_genesis_confirms.indexOf('thing-2') !== -1, false);
+
+      validator.parseOP(
+        [ 'custom_json',
+          { required_auths: [],
+            required_posting_auths: [ 'thing-2' ],
+            id: 'follow',
+            json: '["reblog",{"account":"thing-2","author":"biophil","permlink":"genesis-pocket"}]' } ],
+        null,
+        database
+      );
+
+      assert.equal(database.db.pending_genesis_confirms.indexOf('thing-2') !== -1, true);
     });
   });
 });

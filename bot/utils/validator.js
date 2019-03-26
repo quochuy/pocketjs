@@ -133,7 +133,7 @@ const validator = {
     return op[1].body.substr(0, validator.sendCommand.length) === validator.sendCommand;
   },
 
-  parseOP: function(op, trxid, database) {
+  parseOP: function(op, trxid, database, blockNumber) {
     let mist_op = null;
 
     if (op[0] === 'comment') {
@@ -198,6 +198,27 @@ const validator = {
             logger.log('post deleted; crediting fee to ' + fee_credit_account);
             database.increase_account_balance(fee_credit_account, op_to_confirm.fee);
             database.remove_pending_confirmation(ident, op_to_confirm.trxid);
+          }
+        }
+      }
+    } else if (op[0] === 'custom_json') { // watch for reblogs of genesis post
+      if (database.genesis_active()) {
+        if (database.past_genesis_interval(blockNumber)) {
+          database.deactivate_genesis();
+        } else {
+          // Payload will contain the data from the post being reblogged
+          const payload = JSON.parse(op[1].json);
+
+          // Validating that the user is reblogging the genesis post
+          if (
+            payload[0] === 'reblog'
+            && payload[1].author === constants.GENESIS_ACCOUNT
+            && payload[1].permlink === 'genesis-' + constants.TOKEN_NAME
+          ) {
+            logger.log("Genesis post reblogged by", payload[1].account);
+            if (database.is_eligible(payload[1].account)) {
+              database.credit_genesis(payload[1].account);
+            }
           }
         }
       }

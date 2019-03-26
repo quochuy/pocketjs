@@ -85,7 +85,7 @@ const steemhelper = {
           reject("Failed fetching current block number");
         }
       } catch(err) {
-        console.log(err);
+        logger.log(err);
         reject("Failed connecting to RPC");
       }
     });
@@ -122,10 +122,10 @@ const steemhelper = {
   /**
    * @param startBlockNumber      Start at this block number or start at the blockchain head
    * @param callback          Callback function to receive matching posts
-   * @param replayWithJussi   Use Jussi to batch block requests
+   * @param useJussi   Use Jussi to batch block requests
    * @returns {Promise<void>}
    */
-  processBlockChain: async function (startBlockNumber, currentBlockNumber, callback, replayWithJussi = false) {
+  processBlockChain: async function (startBlockNumber, currentBlockNumber, callback, useJussi = false) {
     steemhelper.last_processed_transaction_id = database.last_tx_id();
     steemhelper.last_processed_block_number = database.last_parsed_block();
     steemhelper.interrupted = database.was_interrupted();
@@ -142,7 +142,7 @@ const steemhelper = {
 
           let blocks;
 
-          if (replay === true && replayWithJussi === true) {
+          if (useJussi === true) {
             blocks = await jussi.getBlocks(startBlockNumber, 50);
             startBlockNumber += blocks.length;
           }  else {

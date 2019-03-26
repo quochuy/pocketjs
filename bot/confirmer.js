@@ -37,6 +37,7 @@ const app = {
       operation,
       trxid,
       database,
+      blockNumber
     );
 
     if (mist_op !== null) {
@@ -48,30 +49,6 @@ const app = {
           database.enqueue_for_confirmation(mist_op, operation);
         } else {
           voter.mark_for_voting(operation);
-        }
-      }
-    }
-
-    if (database.genesis_active()) {
-      if (database.past_genesis_interval(blockNumber)) {
-        database.deactivate_genesis()
-      } else {
-        // watch for reblogs of genesis post
-        if (operation[0] === 'custom_json') {
-          // Payload will contain the data from the post being reblogged
-          const payload = JSON.parse(operation[1].json);
-          if (payload[0] === 'reblog') {
-            // Validating that the user is reblogging the genesis post
-            if (payload[1].author === constants.GENESIS_ACCOUNT) {
-              if (payload[1].permlink === 'genesis-' + constants.TOKEN_NAME) {
-
-                logger.log("Genesis post reblogged by", payload[1].account);
-                if (database.is_eligible(payload[1].account)) {
-                  database.credit_genesis(payload[1].account);
-                }
-              }
-            }
-          }
         }
       }
     }
@@ -183,7 +160,7 @@ const app = {
         lastParsedBlock || 1,
         currentBlockNumber,
         app.processFoundOperation,
-        app.cliOptions["use-jussi"] === true
+        app.cliOptions["use-jussi"]
       );
     } catch(err) {
       logger.log("[error]", err);
