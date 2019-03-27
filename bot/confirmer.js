@@ -48,7 +48,9 @@ const app = {
         if (mist_op.type !== 'confirmation') {
           database.enqueue_for_confirmation(mist_op, operation);
         } else {
-          voter.mark_for_voting(operation);
+          if (steemHelper.isReplaying === false) {
+            voter.mark_for_voting(operation);
+          }
         }
       }
     }
@@ -115,7 +117,15 @@ const app = {
         if (confirm !== null) {
           logger.log("process pending confirmation");
 
-          confirmation.confirm_op(confirm[0], confirm[1]);
+          confirmation.confirm_op(confirm[0], confirm[1])
+            .then(async function(response) {
+              if (
+                app.config.confirmation_active === true
+                && steemHelper.isReplaying === false
+              ) {
+                steemHelper.comment(response.parentPermLink, response.body, response.permlink);
+              }
+            });
           app.lastConfirmationTime = moment(Date.now());
         }
       }

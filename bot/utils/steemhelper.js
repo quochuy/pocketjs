@@ -4,12 +4,14 @@ const dsteem = require('dsteem');
 const _ = require('lodash');
 const jussi = require('./steem-jussi');
 const tools = require('./tools');
+const moment = require('moment');
 let client;
 
 const steemhelper = {
   config: require('../config/config.json'),
   progress: {},
   blockIterator: null,
+  isReplaying: false,
 
   firstNodeToRespond: function(nodes) {
     return new Promise(function(resolve, reject) {
@@ -151,6 +153,15 @@ const steemhelper = {
 
           for(let bi=0; bi<blocks.length; bi++) {
             const block = blocks[bi];
+            const blockTime = moment.utc(block.timestamp);
+            const now = moment(Date.now());
+            const diff = now.diff(blockTime, 'minutes');
+
+            if (diff <= 15) {
+              steemhelper.isReplaying = false;
+            } else {
+              steemhelper.isReplaying = true;
+            }
 
             if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
               const blockNumber = block.transactions[0].block_num;

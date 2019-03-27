@@ -1,6 +1,5 @@
 const rp = require('request-promise');
 const tools = require('./tools');
-const logger = require('./logger');
 
 const jussi = {
   getBlocks: function(fromBlockNumber = 1) {

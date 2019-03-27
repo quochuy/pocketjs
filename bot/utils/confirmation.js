@@ -40,7 +40,7 @@ const confirmation = {
    *
    * @param ident
    * @param needed_confirmation
-   * @returns {Promise<void>}
+   * @returns {Promise<*>}
    */
   confirm_op: async function(ident, needed_confirmation) {
     // first get a list of valid confirmations already posted to this ident
@@ -121,12 +121,19 @@ const confirmation = {
             body += config.confirm_message;
 
             try {
-              const result = await steemHelper.comment(top_level, body, confirmationPermlink);
               logger.log('confirmed: ' + needed_confirmation['trxid'] + ' in block #' + result.result.block_num);
               cache.set(confirmationPermlink, result);
+
+              return {
+                parentPermLink: top_level,
+                body: body,
+                permlink: confirmationPermlink
+              };
             } catch(err) {
               logger.log("[error][steemcomment]", err);
             }
+
+            return true;
           } else {
             logger.log("Transaction already confirmed");
           }
@@ -135,6 +142,8 @@ const confirmation = {
     } else {
       logger.log('Confirmation already posted');
     }
+
+    return false;
   }
 };
 
