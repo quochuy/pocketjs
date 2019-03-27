@@ -45,102 +45,108 @@ const confirmation = {
   confirm_op: async function(ident, needed_confirmation) {
     // first get a list of valid confirmations already posted to this ident
     const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident);
-    const top_level = await steemHelper.getPost(authorPermlink.author, authorPermlink.permlink);
-    const confirmationPermlink = steemHelper.formatter.sanitizePermlink(
-      're-' + top_level.author + '-' + needed_confirmation['trxid']
-    );
+    logger.log(`Checking confirmations for @${authorPermlink.author}/${authorPermlink.permlink}`);
 
-    const cacheData = cache.get(confirmationPermlink);
+    try {
+      const top_level = await steemHelper.getPost(authorPermlink.author, authorPermlink.permlink);
+      const confirmationPermlink = steemHelper.formatter.sanitizePermlink(
+        're-' + top_level.author + '-' + needed_confirmation['trxid']
+      );
 
-    if (!cacheData) {
-      if (top_level !== null) {
-        const replies = await steemHelper.getReplies(top_level.author, top_level.permlink);
+      const cacheData = cache.get(confirmationPermlink);
 
-        if (replies !== null) {
-          const possibleConfirmations = [];
+      if (!cacheData) {
+        if (top_level !== null) {
+          const replies = await steemHelper.getReplies(top_level.author, top_level.permlink);
 
-          for (let ri=0; ri<replies.length; ri++) {
-            const reply = replies[ri];
-            possibleConfirmations.push(validator.getConfirmPayload(reply.body));
-          }
+          if (replies !== null) {
+            const possibleConfirmations = [];
 
-          let found_match = false;
-          // for each reply, I need to check if it corresponds to the one we need.
-          // if no reply corresponds to the one we need, then post a conf.
-          // Or, if every reply does *not* match, then post a conf.
-          for (let pci=0; pci<possibleConfirmations.length; pci++) {
-            const possibleConfirmation = possibleConfirmations[pci];
-            if (possibleConfirmation !== null) {
-              let this_not_match = false;
+            for (let ri=0; ri<replies.length; ri++) {
+              const reply = replies[ri];
+              possibleConfirmations.push(validator.getConfirmPayload(reply.body));
+            }
 
-              for (let label in possibleConfirmation) {
-                if (possibleConfirmation.hasOwnProperty(label)) {
-                  if (needed_confirmation[label] !== possibleConfirmations[label]) {
-                    // being here means that poss_conf is *not* a match
-                    this_not_match = true;
+            let found_match = false;
+            // for each reply, I need to check if it corresponds to the one we need.
+            // if no reply corresponds to the one we need, then post a conf.
+            // Or, if every reply does *not* match, then post a conf.
+            for (let pci=0; pci<possibleConfirmations.length; pci++) {
+              const possibleConfirmation = possibleConfirmations[pci];
+              if (possibleConfirmation !== null) {
+                let this_not_match = false;
 
-                    // don't waste time checking the rest
-                    break;
+                for (let label in possibleConfirmation) {
+                  if (possibleConfirmation.hasOwnProperty(label)) {
+                    if (needed_confirmation[label] !== possibleConfirmations[label]) {
+                      // being here means that poss_conf is *not* a match
+                      this_not_match = true;
+
+                      // don't waste time checking the rest
+                      break;
+                    }
                   }
                 }
-              }
 
-              // got thru one without a discrepancy
-              if (this_not_match === false) {
-                found_match = true;
-                break;
-              }
-            }
-          }
-
-          // found match means I found one conf that is completely right
-          if (found_match === false) {
-            let body = '';
-
-            if (needed_confirmation['type'] === 'send') {
-              for (let label in confirmation.labels) {
-                let conf_data = null;
-
-                if (confirmation.labels.hasOwnProperty(label)) {
-                  const string = confirmation.labels[label];
-
-                  if (confirmation.str_labels.indexOf(label) !== -1) {
-                    conf_data = needed_confirmation[label];
-                  } else {
-                    conf_data = confirmation.format_amount(needed_confirmation[label]);
-                  }
-
-                  body += string + conf_data + "\n";
+                // got thru one without a discrepancy
+                if (this_not_match === false) {
+                  found_match = true;
+                  break;
                 }
               }
-            } else if (needed_confirmation['type'] === 'genesis_confirm') {
-              body += 'Success! You claimed a genesis stake of ' + constants.GENESIS_CREDIT + '.\n';
-              body += 'trxid:' + needed_confirmation['trxid'] + '\n';
             }
 
-            body += config.confirm_message;
+            // found match means I found one conf that is completely right
+            if (found_match === false) {
+              let body = '';
 
-            try {
-              logger.log('confirmed: ' + needed_confirmation['trxid'] + ' in block #' + result.result.block_num);
-              cache.set(confirmationPermlink, result);
+              if (needed_confirmation['type'] === 'send') {
+                for (let label in confirmation.labels) {
+                  let conf_data = null;
 
-              return {
-                parentPermLink: top_level,
-                body: body,
-                permlink: confirmationPermlink
-              };
-            } catch(err) {
-              logger.log("[error][steemcomment]", err);
+                  if (confirmation.labels.hasOwnProperty(label)) {
+                    const string = confirmation.labels[label];
+
+                    if (confirmation.str_labels.indexOf(label) !== -1) {
+                      conf_data = needed_confirmation[label];
+                    } else {
+                      conf_data = confirmation.format_amount(needed_confirmation[label]);
+                    }
+
+                    body += string + conf_data + "\n";
+                  }
+                }
+              } else if (needed_confirmation['type'] === 'genesis_confirm') {
+                body += 'Success! You claimed a genesis stake of ' + constants.GENESIS_CREDIT + '.\n';
+                body += 'trxid:' + needed_confirmation['trxid'] + '\n';
+              }
+
+              body += config.confirm_message;
+
+              try {
+                logger.log('confirmed: ' + needed_confirmation['trxid']);
+                cache.set(confirmationPermlink, "confirmed");
+
+                return {
+                  parentPermLink: top_level,
+                  body: body,
+                  permlink: confirmationPermlink
+                };
+              } catch(err) {
+                logger.log("[error][steemcomment]", err);
+              }
+
+              return true;
+            } else {
+              logger.log("Transaction already confirmed");
             }
-
-            return true;
-          } else {
-            logger.log("Transaction already confirmed");
           }
         }
+      } else {
+        logger.log('Confirmation already posted');
       }
-    } else {
-      logger.log('Confirmation already posted');
+    } catch(err) {
+
     }
 
     return false;

@@ -50,6 +50,8 @@ const app = {
         } else {
           if (steemHelper.isReplaying === false) {
             voter.mark_for_voting(operation);
+          } else {
+            logger.log("Confirmation upvotes are disabled during replay or from the config file");
           }
         }
       }
@@ -65,7 +67,7 @@ const app = {
 
       // watch for genesis activation
       if (operation[1].author === constants.GENESIS_ACCOUNT) {
-        console.log(operation[1].author, 'is genesis account');
+        logger.log(operation[1].author, 'is genesis account');
         if (operation[1].title === 'genesis-'+constants.TOKEN_NAME) {
           logger.log("Genesis post found, activating DB");
           database.activate_genesis(blockNumber);
@@ -123,7 +125,10 @@ const app = {
                 app.config.confirmation_active === true
                 && steemHelper.isReplaying === false
               ) {
-                steemHelper.comment(response.parentPermLink, response.body, response.permlink);
+                const result = await steemHelper.comment(response.parentPermLink, response.body, response.permlink);
+                logger.log(`Confirmation comment in block #${result.result.block_num}`);
+              } else {
+                logger.log("Confirmation comments are disabled during replay or from the config file");
               }
             });
           app.lastConfirmationTime = moment(Date.now());
