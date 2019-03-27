@@ -135,72 +135,76 @@ const steemhelper = {
 
     if (typeof opFoundCallback === "function") {
       let keepLooping = true;
-      try {
-        while (keepLooping !== false) {
-          if (startBlockNumber >= headBlockNumber) {
-            useJussi = false;
-            headBlockNumber = await client.blockchain.getCurrentBlockNum();
-            startBlockNumber = headBlockNumber;
-          }
+      while (keepLooping !== false) {
+        if (startBlockNumber >= headBlockNumber) {
+          useJussi = false;
+          headBlockNumber = await client.blockchain.getCurrentBlockNum();
+          startBlockNumber = headBlockNumber;
+        }
 
-          let blocks = [];
+        let blocks = [];
 
+        try {
           if (useJussi === true) {
             blocks = await jussi.getBlocks(startBlockNumber);
             startBlockNumber += blocks.length;
           }  else {
             blocks = await steemhelper.getNextBlocks(startBlockNumber);
           }
+        } catch(err) {
+          logger.log("[error] failed fetching next blocks", err);
+        }
 
-          for(let bi=0; bi<blocks.length; bi++) {
-            const block = blocks[bi];
-            if (block !== null) {
-              const blockTime = moment.utc(block.timestamp);
+        for(let bi=0; bi<blocks.length; bi++) {
+          const block = blocks[bi];
+          if (block !== null) {
+            const blockTime = moment.utc(block.timestamp);
 
-              const now = moment(Date.now());
-              const diff = now.diff(blockTime, 'minutes');
+            const now = moment(Date.now());
+            const diff = now.diff(blockTime, 'minutes');
 
-              if (diff <= 15) {
-                if (steemhelper.isReplaying === true) {
-                  logger.log("Replay/catchup ended...");
-                }
-
-                steemhelper.isReplaying = false;
-              } else {
-                if (steemhelper.isReplaying === false) {
-                  logger.log("Starting replay/catchup...");
-                }
-
-                steemhelper.isReplaying = true;
+            if (diff <= 15) {
+              if (steemhelper.isReplaying === true) {
+                logger.log("Replay/catchup ended...");
               }
 
-              if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
-                const blockNumber = block.transactions[0].block_num;
+              steemhelper.isReplaying = false;
+            } else {
+              if (steemhelper.isReplaying === false) {
+                logger.log("Starting replay/catchup...");
+              }
 
-                if (blockNumber < database.last_parsed_block()) {
-                  if (steemhelper.config.mode.debug >= 1) {
-                    logger.log(`[Debug][processBlockChain] Skipped already processed block with number: ${blockNumber}`);
-                  }
+              steemhelper.isReplaying = true;
+            }
+
+            if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
+              const blockNumber = block.transactions[0].block_num;
+
+              if (blockNumber < database.last_parsed_block()) {
+                if (steemhelper.config.mode.debug >= 1) {
+                  logger.log(`[Debug][processBlockChain] Skipped already processed block with number: ${blockNumber}`);
                 }
+              }
 
+              try {
                 await steemhelper.processBlock(block, opFoundCallback);
                 if (typeof blockParsedCallback === 'function') {
-                  blockParsedCallback(blockNumber);
+                  await blockParsedCallback(blockNumber);
                 }
-              } else {
-                if (steemhelper.config.mode.debug >= 1) {
-                  logger.log(`[Debug][processBlockChain] Block contains no transaction`);
-                }
+              } catch(err) {
+                logger.log("[error] processing block", err);
               }
             } else {
               if (steemhelper.config.mode.debug >= 1) {
-                logger.log(`[Debug][processBlockChain] Block is null, we must have reached the end of replay with JUSSI`);
+                logger.log(`[Debug][processBlockChain] Block contains no transaction`);
               }
+            }
+          } else {
+            if (steemhelper.config.mode.debug >= 1) {
+              logger.log(`[Debug][processBlockChain] Block is null, we must have reached the end of replay with JUSSI`);
             }
           }
         }
-      } catch(err) {
-        throw "Error fetching blocks " + err
       }
     } else {;
       throw "Callback is not a function";
@@ -336,9 +340,8 @@ const steemhelper = {
       weight = 10000;
     }
 
-    const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.confirmer_key);
-
     try {
+      const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.confirmer_key);
       const result = await client.broadcast.vote({
         voter: steemhelper.config.confirmer_account,
         author: author,
@@ -426,11 +429,15 @@ const steemhelper = {
    * @returns {{author: *, permlink: *}}
    */
   getAuthorPermlinkFromUrl: function(url) {
-    const authorPermlink = url.split('@').pop().split('/');
-    return {
-      author: authorPermlink[0],
-      permlink: authorPermlink[1]
+    if (url) {
+      const authorPermlink = url.split('@').pop().split('/');
+      return {
+        author: authorPermlink[0],
+        permlink: authorPermlink[1]
+      }
     }
+
+    return false;
   },
 
   /**
@@ -462,6 +469,32 @@ const steemhelper = {
     } catch(err) {
       logger.log("[error][get_content_replies]", err);
       return null;
+    }
+  },
+
+  /**
+   *
+   * @param account
+   * @returns {Promise<*>}
+   */
+  getRcMana: async function(account) {
+    try {
+      return await client.rc.getRCMana(account);
+    } catch (err) {
+      logger.log("[error][getRcAccounts]", err);
+    }
+  },
+
+  /**
+   *
+   * @param account
+   * @returns {Promise<*>}
+   */
+  getVpMana: async function(account) {
+    try {
+      return await client.rc.getVPMana(account);
+    } catch (err) {
+      logger.log("[error][getVpMana]", err);
     }
   }
 };

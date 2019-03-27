@@ -19,6 +19,7 @@ const app = {
     { name: 'use-jussi', alias: 'j', type: Boolean }
   ],
   cliOptions: null,
+  minimumRc: 250,
 
   gracefulExit: function(e) {
     logger.log("Graceful exit");
@@ -79,7 +80,7 @@ const app = {
     }
   },
 
-  postProcessing: function(blockNumber) {
+  postProcessing: async function(blockNumber) {
     database.update_last_block(blockNumber);
 
     if (blockNumber % constants.SAVE_INTERVAL === 0) {
@@ -100,7 +101,7 @@ const app = {
 
     // It takes too long to check confirmations, if SIGING is received
     // we will check this one next time
-    app.processPendingConfirmations();
+    await app.processPendingConfirmations();
   },
 
   processFoundOperation: function(blockTimestamp, operation, block, trxid) {
@@ -109,8 +110,6 @@ const app = {
     } else { // Not active, we're pre-genesis
       app.processPreGenesisOperation(operation, block.value, trxid);
     }
-
-    app.postProcessing(block.value);
   },
 
   processPendingConfirmations: async function() {
@@ -119,38 +118,42 @@ const app = {
       const diff = today.diff(app.lastConfirmationTime, 'seconds');
 
       if (
-        app.lastConfirmationTime === 0
-        || diff >= app.confirmationWaitTime
+        (app.lastConfirmationTime === 0 || diff >= app.confirmationWaitTime)
+        && app.config.confirmation_active === true
+        && steemHelper.isReplaying === false
       ) {
         const confirm = database.get_next_confirmation();
 
         if (confirm !== null) {
-          logger.log("process pending confirmation");
-
-          confirmation.confirm_op(confirm[0], confirm[1])
-            .then(async function(confirmationComment) {
-              if (confirmationComment !== false) {
-                if (
-                  app.config.confirmation_active === true
-                  && steemHelper.isReplaying === false
-                ) {
-                  // @TODO: check RC before posting
+          try {
+            const confirmationComment = await confirmation.confirm_op(confirm[0], confirm[1]);
+            if (confirmationComment !== false) {
+              try {
+                const rc = await steemHelper.getRcMana('pocketjs');
+                if (rc.percentage >= app.minimumRc) {
                   const result = await steemHelper.comment(
                     confirmationComment.parentPermLink,
                     confirmationComment.body,
                     confirmationComment.permlink);
 
+                  cache.set(confirmationComment.permlink, result);
+                  app.lastConfirmationTime = moment(Date.now());
                   logger.log(`Confirmation comment in block #${result.result.block_num}`);
                 } else {
-                  logger.log("Confirmation comments are disabled during replay or from the config file");
+                  logger.log(`RC too low: ${rc.percentage / 100}%`);
                 }
-
-                app.lastConfirmationTime = moment(Date.now());
-              } else {
-                // Already confirmed
+              } catch(err) {
+                logger.log(err);
               }
-            });
+            } else {
+              // Already confirmed
+            }
+          } catch(err) {
+            logger.log(err);
+          }
         }
+      } else {
+        logger.log("Too soon to confirm or disabled by config or due to replay");
       }
     }
 

@@ -123,8 +123,7 @@ const confirmation = {
 
               body += config.confirm_message;
 
-              logger.log('confirmed: ' + needed_confirmation['trxid']);
-              cache.set(confirmationPermlink, "confirmed");
+              logger.log('Confirmed: ' + needed_confirmation['trxid']);
 
               return {
                 parentPermLink: top_level,
@@ -137,7 +136,7 @@ const confirmation = {
           }
         }
       } else {
-        logger.log('Confirmation already posted');
+        logger.log(`@${authorPermlink.author}/${authorPermlink.permlink} confirmation already sent`);
       }
     } catch(err) {
       logger.log('[error]', err);

@@ -19,6 +19,7 @@ const voter = {
   dbFname: __dirname + '/../database/votes.json',
   votes_cast: null,
   pending_votes: [],
+  minimumVp: 5000,
 
   init: function() {
     logger.log('Initializing voter module');
@@ -63,29 +64,38 @@ const voter = {
     }
   },
 
-  vote: function() {
+  vote: async function() {
     if (config.vote_on_valid_confs && voter.pending_votes.length > 0) {
       const randomIndex = Math.floor((Math.random() * voter.pending_votes.length) + 1);
       const ident_to_vote = voter.pending_votes[randomIndex];
       const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident_to_vote);
 
-      // @TODO: check VP/RC before upvoting
-      logger.log('Voting for confirmation ' + ident_to_vote);
-      steemHelper.upvote(
-        authorPermlink.author,
-        authorPermlink.permlink,
-        config.vote_weight_percent * 100,
-        function() {
-          logger.log('Voted for confirmation ' + ident_to_vote);
+      if (authorPermlink !== false) {
+        const vp = await steemHelper.getVPMana('pocketjs');
+        if (vp.percentage > voter.minimumVp) {
+          logger.log('Voting for confirmation ' + ident_to_vote);
+          await steemHelper.upvote(
+            authorPermlink.author,
+            authorPermlink.permlink,
+            config.vote_weight_percent * 100,
+            function() {
+              logger.log('Voted for confirmation ' + ident_to_vote);
 
-          voter.pending_votes.remove(ident_to_vote);
-          voter.votes_cast.push(ident_to_vote);
-        },
-        function(err) {
-          voter.pending_votes.remove(ident_to_vote);
+              voter.pending_votes.remove(ident_to_vote);
+              voter.votes_cast.push(ident_to_vote);
+            },
+            function(err) {
+              voter.pending_votes.remove(ident_to_vote);
+            }
+          );
+
+          return true;
+        } else {
+          logger.log(`VP too low: ${vp.percentage / 100}%`)
         }
-      );
+      }
     }
+    return false;
   }
 };
 
