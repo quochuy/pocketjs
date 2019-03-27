@@ -9,5 +9,14 @@ module.exports = {
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
+  },
+
+  settlePromises: function (arr){
+    return Promise.all(arr.map(promise => {
+      return promise.then(
+        value => ({state: 'resolved', value}),
+        value => ({state: 'rejected', value})
+      );
+    }));
   }
 };

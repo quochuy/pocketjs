@@ -29,7 +29,9 @@ const voter = {
       this.reset();
     }
 
-    setInterval(voter.vote, 7000);
+    if (config.vote_on_valid_confs) {
+      setInterval(voter.vote, 7000);
+    }
   },
 
   reset: function() {
@@ -51,39 +53,36 @@ const voter = {
 
   mark_for_voting: function(op) {
     // add vote if active and if it's not for myself
-    if (config.vote_on_valid_confs) {
-      if (op[1].author !== config['confirmer-account']) {
-        const ident = validator.constIdent(op[1].author,op[1].permlink);
+    if (config.vote_on_valid_confs && op[1].author !== config['confirmer-account']) {
+      const ident = validator.constIdent(op[1].author,op[1].permlink);
 
-        // make sure ident isn't in cast or pending:
-        if (voter.votes_cast.indexOf(ident) === -1 && voter.pending_votes.indexOf(ident) === -1) {
-          voter.pending_votes.push(ident);
-        }
+      // make sure ident isn't in cast or pending:
+      if (voter.votes_cast.indexOf(ident) === -1 && voter.pending_votes.indexOf(ident) === -1) {
+        voter.pending_votes.push(ident);
       }
     }
   },
 
   vote: function() {
-    if (config.vote_on_valid_confs) {
-      if (voter.pending_votes.length > 0) {
-        const randomIndex = Math.floor((Math.random() * voter.pending_votes.length) + 1);
-        const ident_to_vote = voter.pending_votes[randomIndex];
-        const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident_to_vote);
-        steemHelper.upvote(
-          authorPermlink.author,
-          authorPermlink.permlink,
-          1000,
-          function() {
-            logger.log('voted for confirmation ' + ident_to_vote);
+    if (config.vote_on_valid_confs && voter.pending_votes.length > 0) {
+      const randomIndex = Math.floor((Math.random() * voter.pending_votes.length) + 1);
+      const ident_to_vote = voter.pending_votes[randomIndex];
+      const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident_to_vote);
 
-            voter.pending_votes.remove(ident_to_vote);
-            voter.votes_cast.push(ident_to_vote);
-          },
-          function(err) {
-            voter.pending_votes.remove(ident_to_vote);
-          }
-        );
-      }
+      steemHelper.upvote(
+        authorPermlink.author,
+        authorPermlink.permlink,
+        config.vote_weight_percent * 100,
+        function() {
+          logger.log('voted for confirmation ' + ident_to_vote);
+
+          voter.pending_votes.remove(ident_to_vote);
+          voter.votes_cast.push(ident_to_vote);
+        },
+        function(err) {
+          voter.pending_votes.remove(ident_to_vote);
+        }
+      );
     }
   }
 };

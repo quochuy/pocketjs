@@ -140,10 +140,10 @@ const steemhelper = {
             replay = true;
           }
 
-          let blocks;
+          let blocks = [];
 
           if (useJussi === true) {
-            blocks = await jussi.getBlocks(startBlockNumber, 50);
+            blocks = await jussi.getBlocks(startBlockNumber);
             startBlockNumber += blocks.length;
           }  else {
             blocks = await steemhelper.getNextBlocks(startBlockNumber);
@@ -165,9 +165,9 @@ const steemhelper = {
           }
         }
       } catch(err) {
-        throw "Error fetching blocks " + err.message;
+        throw "Error fetching blocks " + err
       }
-    } else {
+    } else {;
       throw "Callback is not a function";
     }
   },
@@ -293,37 +293,35 @@ const steemhelper = {
    * @param weight
    * @param callback
    */
-  upvote: function (author, permlink, weight, callback, errorCallback) {
+  upvote: async function (author, permlink, weight, callback, errorCallback) {
     if (typeof weight === 'undefined') {
       weight = 10000;
     }
 
     const postingKey = dsteem.PrivateKey.fromString(steemhelper.config.confirmer_key);
 
-    (async function () {
-      try {
-        const result = await client.broadcast.vote({
-          voter: steemhelper.config.confirmer_account,
-          author: author,
-          permlink: permlink,
-          weight: weight
-        }, postingKey);
+    try {
+      const result = await client.broadcast.vote({
+        voter: steemhelper.config.confirmer_account,
+        author: author,
+        permlink: permlink,
+        weight: weight
+      }, postingKey);
 
-        if (typeof callback === "function") {
-          callback(result);
-        }
-      } catch (error) {
-        logger.log("[Error][broadcast_vote]", error);
-
-        if (error.indexOf('You have already voted in a similar way')) {
-          logger.log("Already voted");
-        }
-
-        if (typeof errorCallback === "function") {
-          errorCallback(error);
-        }
+      if (typeof callback === "function") {
+        callback(result);
       }
-    }());
+    } catch (error) {
+      logger.log("[Error][broadcast_vote]", error);
+
+      if (error.indexOf('You have already voted in a similar way')) {
+        logger.log("Already voted");
+      }
+
+      if (typeof errorCallback === "function") {
+        errorCallback(error);
+      }
+    }
   },
 
   /**
