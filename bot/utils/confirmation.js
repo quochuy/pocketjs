@@ -123,20 +123,14 @@ const confirmation = {
 
               body += config.confirm_message;
 
-              try {
-                logger.log('confirmed: ' + needed_confirmation['trxid']);
-                cache.set(confirmationPermlink, "confirmed");
+              logger.log('confirmed: ' + needed_confirmation['trxid']);
+              cache.set(confirmationPermlink, "confirmed");
 
-                return {
-                  parentPermLink: top_level,
-                  body: body,
-                  permlink: confirmationPermlink
-                };
-              } catch(err) {
-                logger.log("[error][steemcomment]", err);
-              }
-
-              return true;
+              return {
+                parentPermLink: top_level,
+                body: body,
+                permlink: confirmationPermlink
+              };
             } else {
               logger.log("Transaction already confirmed");
             }
@@ -146,7 +140,7 @@ const confirmation = {
         logger.log('Confirmation already posted');
       }
     } catch(err) {
-
+      logger.log('[error]', err);
     }
 
     return false;

@@ -25,6 +25,7 @@ const app = {
 
     database.save();
     voter.save();
+
     app.exitNow = true;
 
     setTimeout(function() {
@@ -90,9 +91,15 @@ const app = {
       logger.log(blockNumber);
     }
 
+    // This is set to true when receving a SIGINT
+    // We will exit when the current block has been processed
     if (app.exitNow === true) {
       process.exit();
     }
+
+    // It takes too long to check confirmations, if SIGING is received
+    // we will check this one next time
+    app.processPendingConfirmations();
   },
 
   processFoundOperation: function(blockTimestamp, operation, block, trxid) {
@@ -103,10 +110,9 @@ const app = {
     }
 
     app.postProcessing(block.value);
-    app.processPendingConfirmations();
   },
 
-  processPendingConfirmations: function() {
+  processPendingConfirmations: async function() {
     if (app.config.confirmation_active && database.active()) {
       const today = moment(Date.now());
       const diff = today.diff(app.lastConfirmationTime, 'seconds');
@@ -120,12 +126,17 @@ const app = {
           logger.log("process pending confirmation");
 
           confirmation.confirm_op(confirm[0], confirm[1])
-            .then(async function(response) {
+            .then(async function(confirmationComment) {
               if (
-                app.config.confirmation_active === true
+                confirmationComment !== false
+                && app.config.confirmation_active === true
                 && steemHelper.isReplaying === false
               ) {
-                const result = await steemHelper.comment(response.parentPermLink, response.body, response.permlink);
+                const result = await steemHelper.comment(
+                  confirmationComment.parentPermLink,
+                  confirmationComment.body,
+                  confirmationComment.permlink);
+
                 logger.log(`Confirmation comment in block #${result.result.block_num}`);
               } else {
                 logger.log("Confirmation comments are disabled during replay or from the config file");
@@ -135,6 +146,8 @@ const app = {
         }
       }
     }
+
+    return true;
   },
 
   run: async function() {
@@ -143,8 +156,8 @@ const app = {
     const commandLineArgs = require('command-line-args');
 
     try {
-      const currentBlockNumber = await steemHelper.connectToRpcNode();
-      if (!currentBlockNumber) {
+      const headBlockData = await steemHelper.connectToRpcNode();
+      if (!headBlockData) {
         app.gracefulExit();
       }
 
@@ -173,10 +186,11 @@ const app = {
 
       steemHelper.processBlockChain(
         lastParsedBlock || 1,
-        currentBlockNumber,
+        headBlockData.currentBlockNum,
         app.processFoundOperation,
-        app.cliOptions["use-jussi"]
-      );
+        app.postProcessing,
+        app.cliOptions["use-jussi"]);
+
     } catch(err) {
       logger.log("[error]", err);
     }

@@ -123,23 +123,28 @@ const steemhelper = {
 
   /**
    * @param startBlockNumber      Start at this block number or start at the blockchain head
-   * @param callback          Callback function to receive matching posts
-   * @param useJussi   Use Jussi to batch block requests
+   * @param opFoundCallback       Callback function to receive matching operations
+   * @param blockParsedCallback   Callback function to notify when a block has been parsed
+   * @param useJussi              Use Jussi to batch block requests
    * @returns {Promise<void>}
    */
-  processBlockChain: async function (startBlockNumber, currentBlockNumber, callback, useJussi = false) {
+  processBlockChain: async function (startBlockNumber, headBlockNumber, opFoundCallback, blockParsedCallback, useJussi = false) {
     steemhelper.last_processed_transaction_id = database.last_tx_id();
     steemhelper.last_processed_block_number = database.last_parsed_block();
     steemhelper.interrupted = database.was_interrupted();
 
     let replay = false;
 
-    if (typeof callback === "function") {
+    if (typeof opFoundCallback === "function") {
       let keepLooping = true;
       try {
         while (keepLooping !== false) {
-          if (startBlockNumber < currentBlockNumber) {
+          if (startBlockNumber < headBlockNumber) {
             replay = true;
+          } else {
+            useJussi = false;
+            headBlockNumber = await client.blockchain.getCurrentBlockNum();
+            startBlockNumber = headBlockNumber;
           }
 
           let blocks = [];
@@ -153,25 +158,40 @@ const steemhelper = {
 
           for(let bi=0; bi<blocks.length; bi++) {
             const block = blocks[bi];
-            const blockTime = moment.utc(block.timestamp);
-            const now = moment(Date.now());
-            const diff = now.diff(blockTime, 'minutes');
+            if (block !== null) {
+              const blockTime = moment.utc(block.timestamp);
 
-            if (diff <= 15) {
-              steemhelper.isReplaying = false;
-            } else {
-              steemhelper.isReplaying = true;
-            }
+              const now = moment(Date.now());
+              const diff = now.diff(blockTime, 'minutes');
 
-            if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
-              const blockNumber = block.transactions[0].block_num;
+              if (diff <= 15) {
+                steemhelper.isReplaying = false;
+              } else {
+                steemhelper.isReplaying = true;
+              }
 
-              if (blockNumber.value < database.last_parsed_block()) {
-                if (steemhelper.config.mode.debug >= 2) {
-                  logger.log(`[Debug][processTransaction]Skipped already processed block with number: ${currentBlockNumber.value}`);
+              if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
+                const blockNumber = block.transactions[0].block_num;
+
+                if (blockNumber < database.last_parsed_block()) {
+                  if (steemhelper.config.mode.debug >= 1) {
+                    logger.log(`[Debug][processBlockChain] Skipped already processed block with number: ${blockNumber}`);
+                  }
+                }
+
+                await steemhelper.processBlock(block, opFoundCallback);
+                if (typeof blockParsedCallback === 'function') {
+                  blockParsedCallback(blockNumber);
+                }
+              } else {
+                if (steemhelper.config.mode.debug >= 1) {
+                  logger.log(`[Debug][processBlockChain] Block contains no transaction`);
                 }
               }
-              steemhelper.processBlock(block, callback);
+            } else {
+              if (steemhelper.config.mode.debug >= 1) {
+                logger.log(`[Debug][processBlockChain] Block is null, we must have reached the end of replay with JUSSI`);
+              }
             }
           }
         }
@@ -221,19 +241,20 @@ const steemhelper = {
   /**
    * Get a block and process its transactions
    *
-   * @param callback
+   * @param opFoundCallback
    * @returns {Promise<void>}
    */
-  processBlock: async function (block, callback) {
+  processBlock: async function (block, opFoundCallback) {
     const blockNumber = block.transactions[0].block_num;
     if (steemhelper.config.mode.debug >= 1) {
-      logger.log('[Debug][block_number]', blockNumber);
-      logger.log('[Debug][time_stamp]', block.timestamp);
+      logger.log(`[Debug][block] #${blockNumber} at ${block.timestamp}`);
     }
 
-    block.transactions.forEach((transaction) => {
-      steemhelper.processTransaction(block.timestamp, blockNumber, transaction, callback)
-    });
+    for(let ti=0; ti<block.transactions.length; ti++) {
+      const transaction = block.transactions[ti];
+      steemhelper.processTransaction(block.timestamp, blockNumber, transaction, opFoundCallback)
+    }
+
     previous_block_number = blockNumber;
 
     database.update_last_block(previous_block_number);
@@ -249,10 +270,10 @@ const steemhelper = {
    *
    * @param blockTimestamp
    * @param transaction
-   * @param callback
+   * @param opFoundCallback
    * @returns {Promise<void>}
    */
-  processTransaction: async function (blockTimestamp, blockNumber, transaction, callback) {
+  processTransaction: async function (blockTimestamp, blockNumber, transaction, opFoundCallback) {
     let trxid = transaction.hasOwnProperty('transaction_id') ? transaction.transaction_id : null
     if (steemhelper.progress.interrupted) {
       if (steemhelper.config.mode.debug >= 2) {
@@ -263,9 +284,11 @@ const steemhelper = {
       }
     }
     else {
-      transaction.operations.forEach((operation) => {
-        steemhelper.processOperation(blockTimestamp, operation, blockNumber, trxid, callback)
-      });
+      for(let oi=0; oi<transaction.operations.length; oi++) {
+        const operation = transaction.operations[oi];
+        steemhelper.processOperation(blockTimestamp, operation, blockNumber, trxid, opFoundCallback)
+      }
+
       steemhelper.progress.last_processed_transaction_id = trxid;
       if (steemhelper.config.mode.debug >= 2) {
         logger.log(`[Debug][Progress] Finished Processing transaction with ID ${trxid}`);
@@ -278,10 +301,10 @@ const steemhelper = {
    *
    * @param blockTimestamp
    * @param operation
-   * @param callback
+   * @param opFoundCallback
    * @returns {Promise<void>}
    */
-  processOperation: async function (blockTimestamp, operation, blockNumber, trxid, callback) {
+  processOperation: async function (blockTimestamp, operation, blockNumber, trxid, opFoundCallback) {
     if (
       operation
       && operation[0]
@@ -290,8 +313,8 @@ const steemhelper = {
         || operation[0].toLowerCase() === 'custom_json'
       )
       && operation[1]) {
-      if (typeof callback === 'function') {
-        callback(blockTimestamp, operation, blockNumber, trxid);
+      if (typeof opFoundCallback === 'function') {
+        opFoundCallback(blockTimestamp, operation, blockNumber, trxid);
       }
     }
   },
