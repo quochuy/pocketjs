@@ -83,12 +83,13 @@ const app = {
     database.update_last_block(blockNumber);
 
     if (blockNumber % constants.SAVE_INTERVAL === 0) {
+      logger.log("Saving DB to disk");
       database.save();
       voter.save();
     }
 
     if (blockNumber % 100000 === 0) {
-      logger.log(blockNumber);
+      logger.log(`Reached block #${blockNumber}`);
     }
 
     // This is set to true when receving a SIGINT
@@ -116,6 +117,7 @@ const app = {
     if (app.config.confirmation_active && database.active()) {
       const today = moment(Date.now());
       const diff = today.diff(app.lastConfirmationTime, 'seconds');
+
       if (
         app.lastConfirmationTime === 0
         || diff >= app.confirmationWaitTime
@@ -127,22 +129,27 @@ const app = {
 
           confirmation.confirm_op(confirm[0], confirm[1])
             .then(async function(confirmationComment) {
-              if (
-                confirmationComment !== false
-                && app.config.confirmation_active === true
-                && steemHelper.isReplaying === false
-              ) {
-                const result = await steemHelper.comment(
-                  confirmationComment.parentPermLink,
-                  confirmationComment.body,
-                  confirmationComment.permlink);
+              if (confirmationComment !== false) {
+                if (
+                  app.config.confirmation_active === true
+                  && steemHelper.isReplaying === false
+                ) {
+                  // @TODO: check RC before posting
+                  const result = await steemHelper.comment(
+                    confirmationComment.parentPermLink,
+                    confirmationComment.body,
+                    confirmationComment.permlink);
 
-                logger.log(`Confirmation comment in block #${result.result.block_num}`);
+                  logger.log(`Confirmation comment in block #${result.result.block_num}`);
+                } else {
+                  logger.log("Confirmation comments are disabled during replay or from the config file");
+                }
+
+                app.lastConfirmationTime = moment(Date.now());
               } else {
-                logger.log("Confirmation comments are disabled during replay or from the config file");
+                // Already confirmed
               }
             });
-          app.lastConfirmationTime = moment(Date.now());
         }
       }
     }
@@ -158,13 +165,17 @@ const app = {
     try {
       const headBlockData = await steemHelper.connectToRpcNode();
       if (!headBlockData) {
+        logger.log("[error] No headblock...");
         app.gracefulExit();
       }
 
       logger.log("===== CONNECTED =====");
 
       process.on('SIGINT', app.gracefulExit);
-      process.on('uncaughtException', app.gracefulExit);
+      process.on('uncaughtException', function(e) {
+        console.log("Uncaught", e);
+        app.gracefulExit();
+      });
 
       cache.init('pocketjs', 3600000);
       database.init();

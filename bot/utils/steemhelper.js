@@ -133,15 +133,11 @@ const steemhelper = {
     steemhelper.last_processed_block_number = database.last_parsed_block();
     steemhelper.interrupted = database.was_interrupted();
 
-    let replay = false;
-
     if (typeof opFoundCallback === "function") {
       let keepLooping = true;
       try {
         while (keepLooping !== false) {
-          if (startBlockNumber < headBlockNumber) {
-            replay = true;
-          } else {
+          if (startBlockNumber >= headBlockNumber) {
             useJussi = false;
             headBlockNumber = await client.blockchain.getCurrentBlockNum();
             startBlockNumber = headBlockNumber;
@@ -165,8 +161,16 @@ const steemhelper = {
               const diff = now.diff(blockTime, 'minutes');
 
               if (diff <= 15) {
+                if (steemhelper.isReplaying === true) {
+                  logger.log("Replay/catchup ended...");
+                }
+
                 steemhelper.isReplaying = false;
               } else {
+                if (steemhelper.isReplaying === false) {
+                  logger.log("Starting replay/catchup...");
+                }
+
                 steemhelper.isReplaying = true;
               }
 
@@ -214,9 +218,8 @@ const steemhelper = {
 
       return [block];
     } catch (error) {
-      logger.log("[Error][examine_block]", error);
-      logger.log("[Error][examine_block][current_block_number]", current_block_number.value);
-      logger.log("[Error][examine_block][previous_block_number]", previous_block_number);
+      logger.log("[Error][getNextBlocks]", error);
+      logger.log("[Error][getNextBlocks][current_block_number]", block_number);
 
       if (
         error.message.indexOf("Cannot read property") !== -1
@@ -228,6 +231,8 @@ const steemhelper = {
         currentBlockNumber = await steemhelper.connectToRpcNode();
         if (currentBlockNumber) {
           steemhelper.blockIterator = await client.blockchain.getBlocks(database.last_parsed_block());
+
+          return [];
         } else {
           throw "Lost connection to RPC and cannot reconnect";
         }
@@ -235,7 +240,6 @@ const steemhelper = {
         throw `Unknown error ${e.message}`;
       }
     }
-
   },
 
   /**

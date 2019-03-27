@@ -69,12 +69,14 @@ const voter = {
       const ident_to_vote = voter.pending_votes[randomIndex];
       const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident_to_vote);
 
+      // @TODO: check VP/RC before upvoting
+      logger.log('Voting for confirmation ' + ident_to_vote);
       steemHelper.upvote(
         authorPermlink.author,
         authorPermlink.permlink,
         config.vote_weight_percent * 100,
         function() {
-          logger.log('voted for confirmation ' + ident_to_vote);
+          logger.log('Voted for confirmation ' + ident_to_vote);
 
           voter.pending_votes.remove(ident_to_vote);
           voter.votes_cast.push(ident_to_vote);
