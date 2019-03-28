@@ -162,9 +162,12 @@ const steemhelper = {
               await tools.sleep(2500);
 
               // If we are falling behind, try to catchup by increasing the batch size
-            } else if (startBlockNumber < (steemhelper.headBlockNumber - 10)) {
+            } else if ((startBlockNumber < (steemhelper.headBlockNumber - 10)) && (steemhelper.headBlockNumber - startBlockNumber < 50)) {
               jussiBatchSize = steemhelper.headBlockNumber - startBlockNumber + 5;
               jussiBatchNumber = 1;
+            } else {
+              jussiBatchSize = 50;
+              jussiBatchNumber = 4;
             }
 
             blocks = await jussi.getBlocks(startBlockNumber, jussiBatchSize, jussiBatchNumber);
