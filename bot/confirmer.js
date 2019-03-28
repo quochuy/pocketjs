@@ -50,7 +50,7 @@ const app = {
         if (mist_op.type !== 'confirmation') {
           database.enqueue_for_confirmation(mist_op, operation);
         } else {
-          if (steemHelper.isReplaying === false) {
+          if (steemHelper.isCatchingUp === false) {
             voter.mark_for_voting(operation);
           } else {
             logger.log("Confirmation upvotes are disabled during replay or from the config file");
@@ -120,7 +120,7 @@ const app = {
       if (
         (app.lastConfirmationTime === 0 || diff >= app.confirmationWaitTime)
         && app.config.confirmation_active === true
-        && steemHelper.isReplaying === false
+        && steemHelper.isCatchingUp === false
       ) {
         const confirm = database.get_next_confirmation();
 
@@ -153,7 +153,9 @@ const app = {
           }
         }
       } else {
-        logger.log("Too soon to confirm or disabled by config or due to replay");
+        if (app.config.mode.debug >= 1) {
+          logger.log("Too soon to confirm or disabled by config or due to replay");
+        }
       }
     }
 
@@ -203,7 +205,10 @@ const app = {
         headBlockData.currentBlockNum,
         app.processFoundOperation,
         app.postProcessing,
-        app.cliOptions["use-jussi"]);
+        app.cliOptions["use-jussi"])
+        .catch(function(err) {
+          logger.log("[error][app.run]", err);
+        });
 
     } catch(err) {
       logger.log("[error]", err);

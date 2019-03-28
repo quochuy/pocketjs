@@ -2,10 +2,8 @@ const rp = require('request-promise');
 const tools = require('./tools');
 
 const jussi = {
-  getBlocks: function(fromBlockNumber = 1) {
+  getBlocks: function(fromBlockNumber = 1, maxBatchSize = 50, batchNumber = 4) {
     return new Promise(function(resolve, reject) {
-      const maxBatchSize = 50;
-      const batchNumber = 4;
       const promises = [];
       let requestBody;
       let blockNumber = parseInt(fromBlockNumber);

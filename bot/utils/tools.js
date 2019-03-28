@@ -18,5 +18,16 @@ module.exports = {
         value => ({state: 'rejected', value})
       );
     }));
+  },
+
+  /**
+   * Go to sleep with promise
+   * @param ms
+   * @returns {Promise<any>}
+   */
+  sleep: function(ms) {
+    return new Promise(function(resolve, reject) {
+      setTimeout(resolve, ms);
+    });
   }
 };

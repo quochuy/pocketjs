@@ -54,7 +54,7 @@ const voter = {
 
   mark_for_voting: function(op) {
     // add vote if active and if it's not for myself
-    if (config.vote_on_valid_confs && op[1].author !== config['confirmer-account']) {
+    if (config.vote_on_valid_confs && op[1].author !== config.confirmer_account) {
       const ident = validator.constIdent(op[1].author,op[1].permlink);
 
       // make sure ident isn't in cast or pending:
@@ -66,28 +66,30 @@ const voter = {
 
   vote: async function() {
     if (config.vote_on_valid_confs && voter.pending_votes.length > 0) {
-      const randomIndex = Math.floor((Math.random() * voter.pending_votes.length) + 1);
+      const randomIndex = Math.floor((Math.random() * voter.pending_votes.length));
       const ident_to_vote = voter.pending_votes[randomIndex];
       const authorPermlink = steemHelper.getAuthorPermlinkFromUrl(ident_to_vote);
+      logger.log(authorPermlink);
 
       if (authorPermlink !== false) {
         const vp = await steemHelper.getVPMana('pocketjs');
+        logger.log("vp", vp);
         if (vp.percentage > voter.minimumVp) {
           logger.log('Voting for confirmation ' + ident_to_vote);
-          await steemHelper.upvote(
-            authorPermlink.author,
-            authorPermlink.permlink,
-            config.vote_weight_percent * 100,
-            function() {
-              logger.log('Voted for confirmation ' + ident_to_vote);
 
-              voter.pending_votes.remove(ident_to_vote);
-              voter.votes_cast.push(ident_to_vote);
-            },
-            function(err) {
-              voter.pending_votes.remove(ident_to_vote);
-            }
-          );
+          try {
+            const result = await steemHelper.upvote(
+              authorPermlink.author,
+              authorPermlink.permlink,
+              config.vote_weight_percent * 100);
+
+            logger.log('Voted for confirmation ' + ident_to_vote, result);
+
+            voter.pending_votes.remove(ident_to_vote);
+            voter.votes_cast.push(ident_to_vote);
+          } catch(err) {
+            voter.pending_votes.remove(ident_to_vote);
+          }
 
           return true;
         } else {

@@ -11,7 +11,8 @@ const steemhelper = {
   config: require('../config/config.json'),
   progress: {},
   blockIterator: null,
-  isReplaying: false,
+  isCatchingUp: true,
+  headBlockNumber: 0,
 
   firstNodeToRespond: function(nodes) {
     return new Promise(function(resolve, reject) {
@@ -132,22 +133,41 @@ const steemhelper = {
     steemhelper.last_processed_transaction_id = database.last_tx_id();
     steemhelper.last_processed_block_number = database.last_parsed_block();
     steemhelper.interrupted = database.was_interrupted();
+    steemhelper.headBlockNumber = headBlockNumber;
+
+    setInterval(function() {
+      client.blockchain.getCurrentBlockNum()
+        .then(function(headBlockNumber) {
+          steemhelper.headBlockNumber = headBlockNumber;
+        });
+    }, 30000);
+
+    let jussiBatchSize = 50;
+    let jussiBatchNumber = 4;
 
     if (typeof opFoundCallback === "function") {
       let keepLooping = true;
       while (keepLooping !== false) {
-        if (startBlockNumber >= headBlockNumber) {
-          useJussi = false;
-          headBlockNumber = await client.blockchain.getCurrentBlockNum();
-          startBlockNumber = headBlockNumber;
-        }
-
         let blocks = [];
 
         try {
+          // Using JUSSI, allows us to optimise block fetching and get to the head block as soon as possible.
           if (useJussi === true) {
-            blocks = await jussi.getBlocks(startBlockNumber);
-            startBlockNumber += blocks.length;
+            // If we are at headblock then try to fetch one block ahead, just in case we are a bit behind
+            if (startBlockNumber >= steemhelper.headBlockNumber) {
+              jussiBatchSize = 2;
+              jussiBatchNumber = 1;
+
+              // Let not overload the JUSSI server, there is only 1 block every 3 seconds after all
+              await tools.sleep(2500);
+
+              // If we are falling behind, try to catchup by increasing the batch size
+            } else if (startBlockNumber < (steemhelper.headBlockNumber - 10)) {
+              jussiBatchSize = steemhelper.headBlockNumber - startBlockNumber + 5;
+              jussiBatchNumber = 1;
+            }
+
+            blocks = await jussi.getBlocks(startBlockNumber, jussiBatchSize, jussiBatchNumber);
           }  else {
             blocks = await steemhelper.getNextBlocks(startBlockNumber);
           }
@@ -158,24 +178,7 @@ const steemhelper = {
         for(let bi=0; bi<blocks.length; bi++) {
           const block = blocks[bi];
           if (block !== null) {
-            const blockTime = moment.utc(block.timestamp);
-
-            const now = moment(Date.now());
-            const diff = now.diff(blockTime, 'minutes');
-
-            if (diff <= 15) {
-              if (steemhelper.isReplaying === true) {
-                logger.log("Replay/catchup ended...");
-              }
-
-              steemhelper.isReplaying = false;
-            } else {
-              if (steemhelper.isReplaying === false) {
-                logger.log("Starting replay/catchup...");
-              }
-
-              steemhelper.isReplaying = true;
-            }
+            startBlockNumber++;
 
             if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {
               const blockNumber = block.transactions[0].block_num;
@@ -200,8 +203,10 @@ const steemhelper = {
               }
             }
           } else {
-            if (steemhelper.config.mode.debug >= 1) {
-              logger.log(`[Debug][processBlockChain] Block is null, we must have reached the end of replay with JUSSI`);
+            steemhelper.isCatchingUp = false;
+
+            if (startBlockNumber < steemhelper.headBlockNumber && useJussi === false) {
+              throw "A block is null...";
             }
           }
         }
@@ -241,7 +246,7 @@ const steemhelper = {
           throw "Lost connection to RPC and cannot reconnect";
         }
       } else {
-        throw `Unknown error ${e.message}`;
+        throw `Unknown error ${error.message}`;
       }
     }
   },
@@ -335,7 +340,7 @@ const steemhelper = {
    * @param weight
    * @param callback
    */
-  upvote: async function (author, permlink, weight, callback, errorCallback) {
+  upvote: async function (author, permlink, weight) {
     if (typeof weight === 'undefined') {
       weight = 10000;
     }
@@ -349,9 +354,7 @@ const steemhelper = {
         weight: weight
       }, postingKey);
 
-      if (typeof callback === "function") {
-        callback(result);
-      }
+      return result;
     } catch (error) {
       logger.log("[Error][broadcast_vote]", error);
 
@@ -359,9 +362,7 @@ const steemhelper = {
         logger.log("Already voted");
       }
 
-      if (typeof errorCallback === "function") {
-        errorCallback(error);
-      }
+      throw error;
     }
   },
 
