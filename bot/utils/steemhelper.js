@@ -180,7 +180,7 @@ const steemhelper = {
 
         for(let bi=0; bi<blocks.length; bi++) {
           const block = blocks[bi];
-          if (block !== null) {
+          if (block) {
             startBlockNumber++;
 
             if (block.hasOwnProperty('transactions') && block.transactions.length > 0) {

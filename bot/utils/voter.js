@@ -72,7 +72,7 @@ const voter = {
       logger.log(authorPermlink);
 
       if (authorPermlink !== false) {
-        const vp = await steemHelper.getVPMana('pocketjs');
+        const vp = await steemHelper.getVpMana('pocketjs');
         logger.log("vp", vp);
         if (vp.percentage > voter.minimumVp) {
           logger.log('Voting for confirmation ' + ident_to_vote);
