@@ -47,7 +47,6 @@ const steemhelper = {
         "https://api.steemit.com",
         "https://api.steem.house",
         "https://rpc.steemviz.com",
-        "https://steemd.minnowsupportproject.org",
         "https://anyx.io"
       ];
 
@@ -162,7 +161,7 @@ const steemhelper = {
               await tools.sleep(2500);
 
               // If we are falling behind, try to catchup by increasing the batch size
-            } else if ((startBlockNumber < (steemhelper.headBlockNumber - 10)) && (steemhelper.headBlockNumber - startBlockNumber < 50)) {
+            } else if ((startBlockNumber < (steemhelper.headBlockNumber - 10)) && (steemhelper.headBlockNumber - startBlockNumber < 45)) {
               jussiBatchSize = steemhelper.headBlockNumber - startBlockNumber + 5;
               jussiBatchNumber = 1;
             } else {
@@ -233,24 +232,34 @@ const steemhelper = {
       logger.log("[Error][getNextBlocks]", error);
       logger.log("[Error][getNextBlocks][current_block_number]", block_number);
 
-      if (
-        error.message.indexOf("Cannot read property") !== -1
-        || error.message.indexOf("network timeout") !== -1
-        || error.message.indexOf("Unable to acquire database lock") !== -1
-        || error.message.indexOf("Internal Error") !== -1
-        || error.message.indexOf("HTTP 50") !== -1
-      ) {
-        currentBlockNumber = await steemhelper.connectToRpcNode();
-        if (currentBlockNumber) {
-          steemhelper.blockIterator = await client.blockchain.getBlocks(database.last_parsed_block());
+      await steemhelper.handleRpcErrors(error.message);
+    }
+  },
 
-          return [];
-        } else {
-          throw "Lost connection to RPC and cannot reconnect";
-        }
+  /**
+   *
+   * @param message
+   * @returns {Promise<Array>}
+   */
+  handleRpcErrors: async function(message) {
+    if (
+      message.indexOf("Cannot read property") !== -1
+      || message.indexOf("network timeout") !== -1
+      || message.indexOf("Unable to acquire database lock") !== -1
+      || message.indexOf("Internal Error") !== -1
+      || message.indexOf("HTTP 50") !== -1
+      || message.indexOf("HTTP 502: Bad Gateway") !== -1
+    ) {
+      currentBlockNumber = await steemhelper.connectToRpcNode();
+      if (currentBlockNumber) {
+        steemhelper.blockIterator = await client.blockchain.getBlocks(database.last_parsed_block());
+
+        return [];
       } else {
-        throw `Unknown error ${error.message}`;
+        throw "Lost connection to RPC and cannot reconnect";
       }
+    } else {
+      throw `Unknown error ${error.message}`;
     }
   },
 
@@ -486,6 +495,8 @@ const steemhelper = {
       return await client.rc.getRCMana(account);
     } catch (err) {
       logger.log("[error][getRcAccounts]", err);
+
+      await steemhelper.handleRpcErrors(err.message);
     }
   },
 
@@ -499,6 +510,8 @@ const steemhelper = {
       return await client.rc.getVPMana(account);
     } catch (err) {
       logger.log("[error][getVpMana]", err);
+
+      await steemhelper.handleRpcErrors(err.message);
     }
   }
 };

@@ -154,7 +154,13 @@ const app = {
         }
       } else {
         if (app.config.mode.debug >= 1) {
-          logger.log("Too soon to confirm or disabled by config or due to replay");
+          if  (steemHelper.isCatchingUp === true) {
+            logger.log("Too soon to confirm or disabled by config or due to replay");
+          } else if (app.config.confirmation_active === false) {
+            logger.log("Confirmation disabled");
+          } else {
+            logger.log("Confirmed less than 20 seconds ago, need to wait");
+          }
         }
       }
     }
