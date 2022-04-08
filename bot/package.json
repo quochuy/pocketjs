@@ -22,7 +22,7 @@
     "fs": "0.0.1-security",
     "lodash": "^4.17.5",
     "md5": "^2.2.1",
-    "moment": "^2.22.2",
+    "moment": "^2.29.2",
     "persistent-cache": "^1.1.1",
     "request": "^2.88.0",
     "request-promise": "^4.2.4"
